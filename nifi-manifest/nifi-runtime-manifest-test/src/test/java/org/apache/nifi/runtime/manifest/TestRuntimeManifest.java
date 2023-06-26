@@ -107,6 +107,7 @@ class TestRuntimeManifest {
         assertFalse(listHdfsDefinition.getSideEffectFree());
         assertFalse(listHdfsDefinition.getTriggerWhenAnyDestinationAvailable());
         assertFalse(listHdfsDefinition.getSupportsDynamicProperties());
+        assertFalse(listHdfsDefinition.getSupportsSensitiveDynamicProperties());
         assertNull(listHdfsDefinition.getDynamicProperties());
         assertFalse(listHdfsDefinition.getSupportsDynamicRelationships());
         assertNull(listHdfsDefinition.getDynamicRelationship());
@@ -253,6 +254,7 @@ class TestRuntimeManifest {
         assertFalse(executeSqlDef.getReadsAttributes().isEmpty());
         assertNotNull(executeSqlDef.getReadsAttributes().get(0).getName());
         assertNotNull(executeSqlDef.getReadsAttributes().get(0).getDescription());
+        assertTrue(executeSqlDef.getSupportsSensitiveDynamicProperties());
 
         // Verify RouteOnAttribute dynamic relationships and dynamic properties
         final ProcessorDefinition routeOnAttributeDef = getProcessorDefinition(bundles, "nifi-standard-nar",
@@ -264,21 +266,13 @@ class TestRuntimeManifest {
         assertNotNull(routeOnAttributeDef.getDynamicRelationship().getDescription());
 
         assertTrue(routeOnAttributeDef.getSupportsDynamicProperties());
+        assertFalse(routeOnAttributeDef.getSupportsSensitiveDynamicProperties());
         assertNotNull(routeOnAttributeDef.getDynamicProperties());
         assertFalse(routeOnAttributeDef.getDynamicProperties().isEmpty());
         assertNotNull(routeOnAttributeDef.getDynamicProperties().get(0).getName());
         assertNotNull(routeOnAttributeDef.getDynamicProperties().get(0).getDescription());
         assertNotNull(routeOnAttributeDef.getDynamicProperties().get(0).getValue());
         assertNotNull(routeOnAttributeDef.getDynamicProperties().get(0).getExpressionLanguageScope());
-
-        // Verify DeleteAzureBlobStorage is deprecated
-        final ProcessorDefinition deleteAzureBlobDef = getProcessorDefinition(bundles, "nifi-azure-nar",
-                "org.apache.nifi.processors.azure.storage.DeleteAzureBlobStorage");
-        assertNotNull(deleteAzureBlobDef.getDeprecated());
-        assertTrue(deleteAzureBlobDef.getDeprecated().booleanValue());
-        assertNotNull(deleteAzureBlobDef.getDeprecationReason());
-        assertNotNull(deleteAzureBlobDef.getDeprecationAlternatives());
-        assertFalse(deleteAzureBlobDef.getDeprecationAlternatives().isEmpty());
 
         // Verify SplitJson has @SystemResourceConsiderations
         final ProcessorDefinition splitJsonDef = getProcessorDefinition(bundles, "nifi-standard-nar",

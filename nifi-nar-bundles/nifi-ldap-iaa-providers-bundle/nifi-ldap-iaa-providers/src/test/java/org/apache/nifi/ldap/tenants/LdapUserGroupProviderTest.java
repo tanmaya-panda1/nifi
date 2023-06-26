@@ -16,8 +16,6 @@
  */
 package org.apache.nifi.ldap.tenants;
 
-import org.apache.directory.server.core.integ.AbstractLdapTestUnit;
-import org.apache.nifi.parameter.ParameterLookup;
 import org.apache.nifi.attribute.expression.language.StandardPropertyValue;
 import org.apache.nifi.authorization.AuthorizerConfigurationContext;
 import org.apache.nifi.authorization.Group;
@@ -26,7 +24,7 @@ import org.apache.nifi.authorization.UserGroupProviderInitializationContext;
 import org.apache.nifi.authorization.exception.AuthorizerCreationException;
 import org.apache.nifi.ldap.LdapAuthenticationStrategy;
 import org.apache.nifi.ldap.ReferralStrategy;
-import org.apache.nifi.remote.io.socket.NetworkUtils;
+import org.apache.nifi.parameter.ParameterLookup;
 import org.apache.nifi.util.NiFiProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,7 +69,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class LdapUserGroupProviderTest extends AbstractLdapTestUnit {
+public class LdapUserGroupProviderTest {
 
     private static final String USER_SEARCH_BASE = "ou=users,o=nifi";
     private static final String GROUP_SEARCH_BASE = "ou=groups,o=nifi";
@@ -84,9 +82,9 @@ public class LdapUserGroupProviderTest extends AbstractLdapTestUnit {
     public void setup() {
         server = new UnboundIdContainer("o=nifi", "classpath:nifi-example.ldif");
         server.setApplicationContext(new GenericApplicationContext());
-        serverPort = NetworkUtils.availablePort();
-        server.setPort(serverPort);
+        server.setPort(0);
         server.afterPropertiesSet();
+        serverPort = server.getPort();
         final UserGroupProviderInitializationContext initializationContext = mock(UserGroupProviderInitializationContext.class);
         when(initializationContext.getIdentifier()).thenReturn("identifier");
 

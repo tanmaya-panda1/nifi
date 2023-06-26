@@ -152,6 +152,7 @@
 
         // configure the user auto complete
         $.widget('nf.userSearchAutocomplete', $.ui.autocomplete, {
+            delay: 500,
             reset: function () {
                 this.term = null;
             },
@@ -454,7 +455,7 @@
                                     description: 'Allows users to create/modify all restricted components regardless of restrictions.'
                                 }];
 
-                                requiredPermissions.each(function (label, id) {
+                                requiredPermissions.forEach(function (label, id) {
                                     if (id !== option.value) {
                                         options.push({
                                             text: "requiring '" + label + "'",

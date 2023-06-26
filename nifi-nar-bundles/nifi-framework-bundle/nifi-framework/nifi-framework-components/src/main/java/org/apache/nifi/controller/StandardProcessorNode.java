@@ -61,6 +61,7 @@ import org.apache.nifi.groups.ProcessGroup;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.logging.LogLevel;
 import org.apache.nifi.logging.LogRepositoryFactory;
+import org.apache.nifi.logging.StandardLoggingContext;
 import org.apache.nifi.nar.ExtensionManager;
 import org.apache.nifi.nar.InstanceClassLoader;
 import org.apache.nifi.nar.NarCloseable;
@@ -1572,7 +1573,7 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
                      SchedulingAgentCallback schedulingAgentCallback, boolean failIfStopping, ScheduledState desiredState, ScheduledState scheduledState) {
 
         final Processor processor = processorRef.get().getProcessor();
-        final ComponentLog procLog = new SimpleProcessLogger(StandardProcessorNode.this.getIdentifier(), processor);
+        final ComponentLog procLog = new SimpleProcessLogger(StandardProcessorNode.this.getIdentifier(), processor, new StandardLoggingContext(StandardProcessorNode.this));
         LOG.info("Starting {}", this);
 
         ScheduledState currentState;
@@ -1594,7 +1595,7 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
         }
 
         if (starting) { // will ensure that the Processor represented by this node can only be started once
-            initiateStart(taskScheduler, administrativeYieldMillis, timeoutMillis, processContextFactory, schedulingAgentCallback);
+            initiateStart(taskScheduler, administrativeYieldMillis, timeoutMillis, new AtomicLong(0), processContextFactory, schedulingAgentCallback);
         } else {
             final String procName = processorRef.get().getProcessor().toString();
             procLog.warn("Cannot start {} because it is not currently stopped. Current state is {}", procName, currentState);
@@ -1711,10 +1712,10 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
 
 
     private void initiateStart(final ScheduledExecutorService taskScheduler, final long administrativeYieldMillis, final long timeoutMilis,
-            final Supplier<ProcessContext> processContextFactory, final SchedulingAgentCallback schedulingAgentCallback) {
+            AtomicLong startupAttemptCount, final Supplier<ProcessContext> processContextFactory, final SchedulingAgentCallback schedulingAgentCallback) {
 
         final Processor processor = getProcessor();
-        final ComponentLog procLog = new SimpleProcessLogger(StandardProcessorNode.this.getIdentifier(), processor);
+        final ComponentLog procLog = new SimpleProcessLogger(StandardProcessorNode.this.getIdentifier(), processor, new StandardLoggingContext(StandardProcessorNode.this));
 
         // Completion Timestamp is set to MAX_VALUE because we don't want to timeout until the task has a chance to run.
         final AtomicLong completionTimestampRef = new AtomicLong(Long.MAX_VALUE);
@@ -1733,8 +1734,15 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
             if (validationStatus != ValidationStatus.VALID) {
                 LOG.debug("Cannot start {} because Processor is currently not valid; will try again after 5 seconds", StandardProcessorNode.this);
 
+                startupAttemptCount.incrementAndGet();
+                if (startupAttemptCount.get() == 240 || startupAttemptCount.get() % 7200 == 0) {
+                    final ValidationState validationState = getValidationState();
+                    procLog.error("Encountering difficulty starting. (Validation State is {}: {}). Will continue trying to start.",
+                            validationState, validationState.getValidationErrors());
+                }
+
                 // re-initiate the entire process
-                final Runnable initiateStartTask = () -> initiateStart(taskScheduler, administrativeYieldMillis, timeoutMilis, processContextFactory, schedulingAgentCallback);
+                final Runnable initiateStartTask = () -> initiateStart(taskScheduler, administrativeYieldMillis, timeoutMilis, startupAttemptCount, processContextFactory, schedulingAgentCallback);
                 taskScheduler.schedule(initiateStartTask, 500, TimeUnit.MILLISECONDS);
 
                 schedulingAgentCallback.onTaskComplete();
@@ -1811,7 +1819,7 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
                 // make sure we only continue retry loop if STOP action wasn't initiated
                 if (scheduledState.get() != ScheduledState.STOPPING && scheduledState.get() != ScheduledState.RUN_ONCE) {
                     // re-initiate the entire process
-                    final Runnable initiateStartTask = () -> initiateStart(taskScheduler, administrativeYieldMillis, timeoutMilis, processContextFactory, schedulingAgentCallback);
+                    final Runnable initiateStartTask = () -> initiateStart(taskScheduler, administrativeYieldMillis, timeoutMilis, startupAttemptCount, processContextFactory, schedulingAgentCallback);
                     taskScheduler.schedule(initiateStartTask, administrativeYieldMillis, TimeUnit.MILLISECONDS);
                 } else {
                     completeStopAction();

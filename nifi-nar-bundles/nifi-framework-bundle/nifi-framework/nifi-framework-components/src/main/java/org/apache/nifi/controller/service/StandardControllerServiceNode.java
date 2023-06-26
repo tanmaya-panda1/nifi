@@ -58,6 +58,7 @@ import org.apache.nifi.nar.NarCloseable;
 import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.parameter.ParameterLookup;
 import org.apache.nifi.processor.SimpleProcessLogger;
+import org.apache.nifi.logging.StandardLoggingContext;
 import org.apache.nifi.registry.ComponentVariableRegistry;
 import org.apache.nifi.util.CharacterFilterUtils;
 import org.apache.nifi.util.FormatUtils;
@@ -83,6 +84,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -574,6 +576,7 @@ public class StandardControllerServiceNode extends AbstractComponentNode impleme
 
             final ControllerServiceProvider controllerServiceProvider = this.serviceProvider;
             final StandardControllerServiceNode service = this;
+            AtomicLong enablingAttemptCount = new AtomicLong(0);
             scheduler.execute(new Runnable() {
                 @Override
                 public void run() {
@@ -591,6 +594,14 @@ public class StandardControllerServiceNode extends AbstractComponentNode impleme
                         final ValidationState validationState = getValidationState();
                         LOG.debug("Cannot enable {} because it is not currently valid. (Validation State is {}: {}). Will try again in 1 second",
                             StandardControllerServiceNode.this, validationState, validationState.getValidationErrors());
+
+                        enablingAttemptCount.incrementAndGet();
+                        if (enablingAttemptCount.get() == 120 || enablingAttemptCount.get() % 3600 == 0) {
+                            final ComponentLog componentLog = new SimpleProcessLogger(getIdentifier(), StandardControllerServiceNode.this,
+                                    new StandardLoggingContext(StandardControllerServiceNode.this));
+                            componentLog.error("Encountering difficulty enabling. (Validation State is {}: {}). Will continue trying to enable.",
+                                    validationState, validationState.getValidationErrors());
+                        }
 
                         try {
                             scheduler.schedule(this, 1, TimeUnit.SECONDS);
@@ -626,7 +637,8 @@ public class StandardControllerServiceNode extends AbstractComponentNode impleme
                         future.completeExceptionally(e);
 
                         final Throwable cause = e instanceof InvocationTargetException ? e.getCause() : e;
-                        final ComponentLog componentLog = new SimpleProcessLogger(getIdentifier(), StandardControllerServiceNode.this);
+                        final ComponentLog componentLog = new SimpleProcessLogger(getIdentifier(), StandardControllerServiceNode.this,
+                                new StandardLoggingContext(StandardControllerServiceNode.this));
                         componentLog.error("Failed to invoke @OnEnabled method", cause);
                         invokeDisable(configContext);
 
@@ -708,7 +720,7 @@ public class StandardControllerServiceNode extends AbstractComponentNode impleme
             LOG.debug("Successfully disabled {}", this);
         } catch (Exception e) {
             final Throwable cause = e instanceof InvocationTargetException ? e.getCause() : e;
-            final ComponentLog componentLog = new SimpleProcessLogger(getIdentifier(), StandardControllerServiceNode.this);
+            final ComponentLog componentLog = new SimpleProcessLogger(getIdentifier(), StandardControllerServiceNode.this, new StandardLoggingContext(StandardControllerServiceNode.this));
             componentLog.error("Failed to invoke @OnDisabled method due to {}", cause);
             LOG.error("Failed to invoke @OnDisabled method of {} due to {}", getControllerServiceImplementation(), cause.toString());
         }

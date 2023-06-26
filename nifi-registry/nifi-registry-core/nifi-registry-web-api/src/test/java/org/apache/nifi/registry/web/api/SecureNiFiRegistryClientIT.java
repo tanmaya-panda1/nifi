@@ -53,11 +53,11 @@ import javax.ws.rs.ForbiddenException;
 import java.io.IOException;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(
@@ -72,6 +72,8 @@ public class SecureNiFiRegistryClientIT extends IntegrationTestBase {
 
     static final String INITIAL_ADMIN_IDENTITY = "CN=user1, OU=nifi";
     static final String NO_ACCESS_IDENTITY = "CN=no-access, OU=nifi";
+
+    static final String SECOND_IDENTITY = "CN=keep_author, OU=nifi";
 
     private NiFiRegistryClient client;
 
@@ -160,6 +162,21 @@ public class SecureNiFiRegistryClientIT extends IntegrationTestBase {
         final VersionedFlowSnapshot createdSnapshot = snapshotClient.create(snapshot);
         assertNotNull(createdSnapshot);
         assertEquals(INITIAL_ADMIN_IDENTITY, createdSnapshot.getSnapshotMetadata().getAuthor());
+
+        final VersionedFlowSnapshotMetadata snapshotMetadata2 = new VersionedFlowSnapshotMetadata();
+        snapshotMetadata2.setBucketIdentifier(createdFlow.getBucketIdentifier());
+        snapshotMetadata2.setFlowIdentifier(createdFlow.getIdentifier());
+        snapshotMetadata2.setVersion(2);
+        snapshotMetadata2.setComments("This is snapshot #2");
+        snapshotMetadata2.setAuthor(SECOND_IDENTITY);
+
+        final VersionedFlowSnapshot snapshot2 = new VersionedFlowSnapshot();
+        snapshot2.setSnapshotMetadata(snapshotMetadata2);
+        snapshot2.setFlowContents(rootProcessGroup);
+
+        final VersionedFlowSnapshot createdSnapshot2 = snapshotClient.create(snapshot2, true);
+        assertNotNull(createdSnapshot2);
+        assertEquals(SECOND_IDENTITY, createdSnapshot2.getSnapshotMetadata().getAuthor());
     }
 
     @Test

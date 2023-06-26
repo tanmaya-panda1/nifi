@@ -50,6 +50,7 @@ import org.apache.nifi.flow.BatchSize;
 import org.apache.nifi.flow.Bundle;
 import org.apache.nifi.flow.ComponentType;
 import org.apache.nifi.flow.ConnectableComponent;
+import org.apache.nifi.flow.ConnectableComponentType;
 import org.apache.nifi.flow.ParameterProviderReference;
 import org.apache.nifi.flow.VersionedComponent;
 import org.apache.nifi.flow.VersionedConnection;
@@ -93,6 +94,7 @@ import org.apache.nifi.registry.VariableDescriptor;
 import org.apache.nifi.registry.flow.FlowRegistryClientContextFactory;
 import org.apache.nifi.registry.flow.FlowRegistryClientNode;
 import org.apache.nifi.registry.flow.FlowRegistryException;
+import org.apache.nifi.registry.flow.FlowSnapshotContainer;
 import org.apache.nifi.registry.flow.RegisteredFlowSnapshot;
 import org.apache.nifi.registry.flow.StandardVersionControlInformation;
 import org.apache.nifi.registry.flow.VersionControlInformation;
@@ -217,6 +219,10 @@ public class StandardVersionedComponentSynchronizer implements VersionedComponen
                 }
             }
 
+            if (diff.getDifferenceType() == DifferenceType.POSITION_CHANGED) {
+                continue;
+            }
+
             final VersionedComponent component = diff.getComponentA() == null ? diff.getComponentB() : diff.getComponentA();
             updatedVersionedComponentIds.add(component.getIdentifier());
 
@@ -310,6 +316,10 @@ public class StandardVersionedComponentSynchronizer implements VersionedComponen
         group.setDefaultFlowFileExpiration(proposed.getDefaultFlowFileExpiration());
         group.setDefaultBackPressureObjectThreshold(proposed.getDefaultBackPressureObjectThreshold());
         group.setDefaultBackPressureDataSizeThreshold(proposed.getDefaultBackPressureDataSizeThreshold());
+
+        if (group.getLogFileSuffix() == null || group.getLogFileSuffix().isEmpty()) {
+            group.setLogFileSuffix(proposed.getLogFileSuffix());
+        }
 
         final VersionedFlowCoordinates remoteCoordinates = proposed.getVersionedFlowCoordinates();
         if (remoteCoordinates == null) {
@@ -508,33 +518,20 @@ public class StandardVersionedComponentSynchronizer implements VersionedComponen
     }
 
     private void synchronizeChildGroups(final ProcessGroup group, final VersionedProcessGroup proposed, final Map<String, VersionedParameterContext> versionedParameterContexts,
-                                        final Map<String, ProcessGroup> childGroupsByVersionedId,
-                                        final Map<String, ParameterProviderReference> parameterProviderReferences, final ProcessGroup topLevelGroup) throws ProcessorInstantiationException {
+                                        final Map<String, ProcessGroup> childGroupsByVersionedId, final Map<String, ParameterProviderReference> parameterProviderReferences,
+                                        final ProcessGroup topLevelGroup) throws ProcessorInstantiationException {
 
         for (final VersionedProcessGroup proposedChildGroup : proposed.getProcessGroups()) {
             final ProcessGroup childGroup = childGroupsByVersionedId.get(proposedChildGroup.getIdentifier());
             final VersionedFlowCoordinates childCoordinates = proposedChildGroup.getVersionedFlowCoordinates();
 
-            // if there is a nested process group that is version controlled, make sure get the param contexts that go with that snapshot
-            // instead of the ones from the parent which would have been passed in to this method
-            Map<String, VersionedParameterContext> childParameterContexts = versionedParameterContexts;
-            if (childCoordinates != null && syncOptions.isUpdateDescendantVersionedFlows()) {
-                final String childParameterContextName = proposedChildGroup.getParameterContextName();
-                if (childParameterContextName != null && !versionedParameterContexts.containsKey(childParameterContextName)) {
-                    childParameterContexts = getVersionedParameterContexts(childCoordinates);
-                } else {
-                    childParameterContexts = versionedParameterContexts;
-                }
-            }
-
             if (childGroup == null) {
                 final ProcessGroup added = addProcessGroup(group, proposedChildGroup, context.getComponentIdGenerator(), preExistingVariables,
-                        childParameterContexts, parameterProviderReferences, topLevelGroup);
+                        versionedParameterContexts, parameterProviderReferences, topLevelGroup);
                 context.getFlowManager().onProcessGroupAdded(added);
                 added.findAllRemoteProcessGroups().forEach(RemoteProcessGroup::initialize);
                 LOG.info("Added {} to {}", added, group);
             } else if (childCoordinates == null || syncOptions.isUpdateDescendantVersionedFlows()) {
-
                 final StandardVersionedComponentSynchronizer sync = new StandardVersionedComponentSynchronizer(context);
                 sync.setPreExistingVariables(preExistingVariables);
                 sync.setUpdatedVersionedComponentIds(updatedVersionedComponentIds);
@@ -543,7 +540,7 @@ public class StandardVersionedComponentSynchronizer implements VersionedComponen
                     .build();
 
                 sync.setSynchronizationOptions(options);
-                sync.synchronize(childGroup, proposedChildGroup, childParameterContexts, parameterProviderReferences, topLevelGroup);
+                sync.synchronize(childGroup, proposedChildGroup, versionedParameterContexts, parameterProviderReferences, topLevelGroup);
 
                 LOG.info("Updated {}", childGroup);
             }
@@ -1802,6 +1799,7 @@ public class StandardVersionedComponentSynchronizer implements VersionedComponen
                 groupToUpdate.setComments(proposed.getComments());
                 groupToUpdate.setName(proposed.getName());
                 groupToUpdate.setPosition(new Position(proposed.getPosition().getX(), proposed.getPosition().getY()));
+                groupToUpdate.setLogFileSuffix(proposed.getLogFileSuffix());
 
                 if (processGroup == null) {
                     LOG.info("Successfully synchronized {} by adding it to the flow", groupToUpdate);
@@ -2224,7 +2222,8 @@ public class StandardVersionedComponentSynchronizer implements VersionedComponen
         final int flowVersion = versionedFlowCoordinates.getVersion();
 
         try {
-            final RegisteredFlowSnapshot childSnapshot = flowRegistry.getFlowContents(FlowRegistryClientContextFactory.getAnonymousContext(), bucketId, flowId, flowVersion, false);
+            final FlowSnapshotContainer snapshotContainer = flowRegistry.getFlowContents(FlowRegistryClientContextFactory.getAnonymousContext(), bucketId, flowId, flowVersion, false);
+            final RegisteredFlowSnapshot childSnapshot = snapshotContainer.getFlowSnapshot();
             return childSnapshot.getParameterContexts();
         } catch (final FlowRegistryException e) {
             throw new IllegalArgumentException("The Flow Registry with ID " + registryId + " reports that no Flow exists with Bucket "
@@ -3190,6 +3189,26 @@ public class StandardVersionedComponentSynchronizer implements VersionedComponen
         }
     }
 
+    private Set<Connectable> getUpstreamComponents(final VersionedConnection connection) {
+        if (connection == null) {
+            return Collections.emptySet();
+        }
+
+        final Set<Connectable> components = new HashSet<>();
+        findUpstreamComponents(connection, components);
+        return components;
+    }
+
+    private void findUpstreamComponents(final VersionedConnection connection, final Set<Connectable> components) {
+        final ConnectableComponent sourceConnectable = connection.getSource();
+        final Connectable source = context.getFlowManager().findConnectable(sourceConnectable.getId());
+        if (sourceConnectable.getType() == ConnectableComponentType.FUNNEL) {
+            source.getIncomingConnections().forEach(incoming -> findUpstreamComponents(incoming, components));
+        } else {
+            components.add(source);
+        }
+    }
+
     @Override
     public void synchronize(final Connection connection, final VersionedConnection proposedConnection, final ProcessGroup group, final FlowSynchronizationOptions synchronizationOptions)
         throws FlowSynchronizationException, TimeoutException {
@@ -3201,7 +3220,10 @@ public class StandardVersionedComponentSynchronizer implements VersionedComponen
         final long timeout = System.currentTimeMillis() + synchronizationOptions.getComponentStopTimeout().toMillis();
 
         // Stop any upstream components so that we can update the connection
-        final Set<Connectable> upstream = getUpstreamComponents(connection);
+        final Set<Connectable> upstream = new HashSet<>(getUpstreamComponents(connection));
+        if (connection == null) {
+            upstream.addAll(getUpstreamComponents(proposedConnection));
+        }
         Set<Connectable> stoppedComponents;
         try {
             stoppedComponents = stopOrTerminate(upstream, timeout, synchronizationOptions);

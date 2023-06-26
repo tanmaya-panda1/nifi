@@ -73,7 +73,7 @@
             require('nf.ProcessGroup'),
             require('nf.ProcessGroupConfiguration'),
             require('nf.Settings'),
-            recuire('nf.ParameterContexts'),
+            require('nf.ParameterContexts'),
             require('lodash'));
     } else {
         factory(root.$,
@@ -107,6 +107,7 @@
     var groupId = null;
     var supportsSensitiveDynamicProperties = false;
     var propertyVerificationCallback = null;
+    var currentParameters = null;
     var COMBO_MIN_WIDTH = 212;
     var EDITOR_MIN_WIDTH = 212;
     var EDITOR_MIN_HEIGHT = 100;
@@ -1033,7 +1034,7 @@
             var descriptors = gridContainer.data('descriptors');
             var propertyDescriptor = descriptors[item.property];
 
-            var controllerServiceLookup = d3.map();
+            var controllerServiceLookup = new Map();
             var options = [];
             $.each(response.controllerServiceTypes, function (i, controllerServiceType) {
                 controllerServiceLookup.set(i, controllerServiceType);
@@ -1466,7 +1467,8 @@
 
             // sets the available parameters for the specified property descriptor
             var loadParameters = function (propertyDescriptor, parameterDeferred, setParameters) {
-                parameterDeferred(propertyDescriptor, groupId).done(function (parameters) {
+                parameterDeferred(nfCommon.isSensitiveProperty(propertyDescriptor), groupId).done(function (parameters) {
+                    currentParameters = parameters;
                     setParameters(parameters);
                 });
             };
@@ -1720,11 +1722,24 @@
                                                 // Get the current property value to compare with the dependent value
                                                 var propertyValue = property.value;
 
+                                                // check if the property references a parameter
+                                                if (!_.isEmpty(currentParameters)) {
+                                                    const paramReference = getExistingParametersReferenced(propertyValue);
+                                                    // if parameter references exist, loop through all and interpolate the value in the propertyValue string
+                                                    if (paramReference.length > 0) {
+                                                        paramReference.forEach(function (param) {
+                                                            // handle null values by replacing with an empty string instead
+                                                            propertyValue = propertyValue.replace('#{' + param.name + '}', nfCommon.isDefinedAndNotNull(param.value) ? param.value : '');
+                                                        });
+                                                    }
+                                                }
+
                                                 // Test the dependentValues array against the current value of the property
-                                                // If not, then mark the current property hidden attribute is true
-                                                if (propertyValue != null) {
-                                                    if (dependency.hasOwnProperty("dependentValues")) {
+                                                if (propertyValue) {
+                                                    if (dependency.dependentValues) {
                                                         hidden = !dependency.dependentValues.includes(propertyValue);
+                                                    } else {
+                                                        hidden = false;
                                                     }
                                                 } else {
                                                     hidden = true;
@@ -1738,7 +1753,7 @@
                                                 return false;
                                             }
                                         }
-                                    })
+                                    });
                                 });
                             }
                         } else {
@@ -1867,14 +1882,30 @@
      * @param {type} properties
      * @param {type} descriptors
      * @param {type} history
+     * @param {type} options
      */
-    var loadProperties = function (table, properties, descriptors, history) {
+    var loadProperties = function (table, properties, descriptors, history, options) {
         // save the original descriptors and history
         table.data({
             'descriptors': descriptors,
             'history': history
         });
 
+        if (_.isFunction(options.parameterDeferred) && _.isFunction(options.getParameterContext)) {
+            var paramContext = options.getParameterContext(groupId);
+            var canReadParamContext = _.get(paramContext, 'permissions.canRead', false);
+            if (canReadParamContext) {
+                options.parameterDeferred(false, groupId).done(function (parameters) {
+                    currentParameters = parameters;
+                    processProperties(table, properties, descriptors);
+                });
+                return;
+            }
+        }
+        processProperties(table, properties, descriptors);
+    };
+
+    var processProperties = function (table, properties, descriptors) {
         // get the grid
         var propertyGrid = table.data('gridInstance');
         var propertyData = propertyGrid.getData();
@@ -1929,14 +1960,27 @@
                             if (property.property === dependency.propertyName) {
                                 dependent = true;
                                 if (property.hidden === false) {
-                                    // Get the property value by propertyName
-                                    var propertyValue = properties[dependency.propertyName];
+                                    // Get the current property value to compare with the dependent value
+                                    var propertyValue = property.value;
 
-                                    // Test the dependentValues against the current value of the property
-                                    // If not, then mark the current property hidden attribute is true
-                                    if (propertyValue != null) {
-                                        if (dependency.hasOwnProperty("dependentValues")) {
+                                    // check if the property references a parameter
+                                    if (!_.isEmpty(currentParameters)) {
+                                        const paramReference = getExistingParametersReferenced(propertyValue);
+                                        // if parameter references exist, loop through all and interpolate the value in the propertyValue string
+                                        if (paramReference.length > 0) {
+                                            paramReference.forEach(function (param) {
+                                                // handle null values by replacing with an empty string instead
+                                                propertyValue = propertyValue.replace('#{' + param.name + '}', nfCommon.isDefinedAndNotNull(param.value) ? param.value : '');
+                                            });
+                                        }
+                                    }
+
+                                    // Test the dependentValues array against the current value of the property
+                                    if (propertyValue) {
+                                        if (dependency.dependentValues) {
                                             hidden = !dependency.dependentValues.includes(propertyValue);
+                                        } else {
+                                            hidden = false;
                                         }
                                     } else {
                                         hidden = true;
@@ -1945,10 +1989,12 @@
                                     hidden = true;
                                 }
                                 if (hidden) {
+                                    // It is sufficient to have found a single instance of not meeting the
+                                    // requirement for a dependent value in order to hide a property
                                     return false;
                                 }
                             }
-                        })
+                        });
                     });
                 }
 
@@ -1978,6 +2024,7 @@
      * @param {jQuery} propertyTableContainer
      */
     var clear = function (propertyTableContainer) {
+        currentParameters = null;
         var options = propertyTableContainer.data('options');
         if (options.readOnly === true) {
             nfUniversalCapture.removeAllPropertyDetailDialogs();
@@ -1999,6 +2046,43 @@
         var propertyGrid = table.data('gridInstance');
         var propertyData = propertyGrid.getData();
         propertyData.setItems([]);
+    };
+
+    /**
+     * Gets all the referenced parameters from the {currentParameters} based on the value of {parameterReference}
+     *
+     * @param {string} parameterReference
+     * @returns {ParameterEntity[]}
+     */
+    var getExistingParametersReferenced = function (parameterReference) {
+        if (_.isEmpty(currentParameters)) {
+            return [];
+        }
+        var existingParametersReferenced = [];
+
+        if (!_.isNil(parameterReference)) {
+            // can't use from common/constants because we are modifying the lastIndex below
+            var paramRefsRegex = /#{(')?([a-zA-Z0-9-_. ]+)\1}/gm;
+            var possibleMatch;
+
+            while ((possibleMatch = paramRefsRegex.exec(parameterReference)) !== null) {
+                // This is necessary to avoid infinite loops with zero-width matches
+                if (possibleMatch.index === paramRefsRegex.lastIndex) {
+                    paramRefsRegex.lastIndex++;
+                }
+
+                if (!_.isEmpty(possibleMatch) && possibleMatch.length === 3) {
+                    const parameterName = possibleMatch[2];
+                    var found = currentParameters.find(function (param) {
+                        return param.name === parameterName;
+                    });
+                    if (!_.isNil(found)) {
+                        existingParametersReferenced.push(found);
+                    }
+                }
+            }
+        }
+        return existingParametersReferenced;
     };
 
     var methods = {
@@ -2263,9 +2347,14 @@
          * @argument {map} history
          */
         loadProperties: function (properties, descriptors, history) {
-            return this.each(function () {
-                var table = $(this).find('div.property-table');
-                loadProperties(table, properties, descriptors, history);
+            var self = this;
+
+            return self.each(function () {
+                var propertyTableContainer = $(this);
+                var options = propertyTableContainer.data('options');
+
+                var table = propertyTableContainer.find('div.property-table');
+                loadProperties(table, properties, descriptors, history, options);
             });
         },
 

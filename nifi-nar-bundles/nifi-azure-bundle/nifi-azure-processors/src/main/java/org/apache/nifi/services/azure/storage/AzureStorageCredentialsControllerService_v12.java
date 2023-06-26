@@ -29,14 +29,15 @@ import org.apache.nifi.processors.azure.storage.utils.AzureStorageUtils;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Provides credentials details for Azure Blob processors
+ * Provides credentials details for Azure Storage processors
  *
  * @see AbstractControllerService
  */
-@Tags({"azure", "microsoft", "cloud", "storage", "blob", "credentials"})
-@CapabilityDescription("Provides credentials for Azure Blob processors using Azure Blob Storage client library v12.")
+@Tags({"azure", "microsoft", "cloud", "storage", "blob", "credentials", "queue"})
+@CapabilityDescription("Provides credentials for Azure Storage processors using Azure Storage client library v12.")
 public class AzureStorageCredentialsControllerService_v12 extends AbstractControllerService implements AzureStorageCredentialsService_v12 {
 
     public static final PropertyDescriptor ACCOUNT_NAME = new PropertyDescriptor.Builder()
@@ -133,7 +134,7 @@ public class AzureStorageCredentialsControllerService_v12 extends AbstractContro
     }
 
     @Override
-    public AzureStorageCredentialsDetails_v12 getCredentialsDetails() {
+    public AzureStorageCredentialsDetails_v12 getCredentialsDetails(Map<String, String> attributes) {
         String accountName = context.getProperty(ACCOUNT_NAME).getValue();
         String endpointSuffix = context.getProperty(ENDPOINT_SUFFIX).getValue();
         AzureStorageCredentialsType credentialsType = AzureStorageCredentialsType.valueOf(context.getProperty(CREDENTIALS_TYPE).getValue());

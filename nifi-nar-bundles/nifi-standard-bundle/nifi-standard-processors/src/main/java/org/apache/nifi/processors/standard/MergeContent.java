@@ -120,9 +120,8 @@ import java.util.zip.ZipOutputStream;
         + "\"fragment.identifier\" attribute and the same value for the \"fragment.index\" attribute, the first FlowFile processed will be "
         + "accepted and subsequent FlowFiles will not be accepted into the Bin."),
     @ReadsAttribute(attribute = "fragment.count", description = "Applicable only if the <Merge Strategy> property is set to Defragment. This "
-        + "attribute must be present on all FlowFiles with the same value for the fragment.identifier attribute. All FlowFiles in the same "
-        + "bundle must have the same value for this attribute. The value of this attribute indicates how many FlowFiles should be expected "
-        + "in the given bundle."),
+        + "attribute indicates how many FlowFiles should be expected in the given bundle. At least one FlowFile must have this attribute in "
+        + "the bundle. If multiple FlowFiles contain the \"fragment.count\" attribute in a given bundle, all must have the same value."),
     @ReadsAttribute(attribute = "segment.original.filename", description = "Applicable only if the <Merge Strategy> property is set to Defragment. "
         + "This attribute must be present on all FlowFiles with the same value for the fragment.identifier attribute. All FlowFiles in the same "
         + "bundle must have the same value for this attribute. The value of this attribute will be used for the filename of the completed merged "
@@ -155,13 +154,7 @@ public class MergeContent extends BinFiles {
     public static final String FRAGMENT_ID_ATTRIBUTE = FragmentAttributes.FRAGMENT_ID.key();
     public static final String FRAGMENT_INDEX_ATTRIBUTE = FragmentAttributes.FRAGMENT_INDEX.key();
     public static final String FRAGMENT_COUNT_ATTRIBUTE = FragmentAttributes.FRAGMENT_COUNT.key();
-
-    // old style attributes
-    public static final String SEGMENT_ID_ATTRIBUTE = "segment.identifier";
-    public static final String SEGMENT_INDEX_ATTRIBUTE = "segment.index";
-    public static final String SEGMENT_COUNT_ATTRIBUTE = "segment.count";
     public static final String SEGMENT_ORIGINAL_FILENAME = FragmentAttributes.SEGMENT_ORIGINAL_FILENAME.key();
-
 
     public static final AllowableValue METADATA_STRATEGY_USE_FIRST = new AllowableValue("Use First Metadata", "Use First Metadata",
             "For any input format that supports metadata (Avro, e.g.), the metadata for the first FlowFile in the bin will be set on the output FlowFile.");
@@ -185,8 +178,7 @@ public class MergeContent extends BinFiles {
             "Defragment",
             "Defragment",
             "Combines fragments that are associated by attributes back into a single cohesive FlowFile. If using this strategy, all FlowFiles must "
-            + "have the attributes <fragment.identifier>, <fragment.count>, and <fragment.index> or alternatively (for backward compatibility "
-            + "purposes) <segment.identifier>, <segment.count>, and <segment.index>. All FlowFiles with the same value for \"fragment.identifier\" "
+            + "have the attributes <fragment.identifier>, <fragment.count>, and <fragment.index>. All FlowFiles with the same value for \"fragment.identifier\" "
             + "will be grouped together. All FlowFiles in this group must have the same value for the \"fragment.count\" attribute. All FlowFiles "
             + "in this group must have a unique value for the \"fragment.index\" attribute between 0 and the value of the \"fragment.count\" attribute.");
 
@@ -431,19 +423,7 @@ public class MergeContent extends BinFiles {
 
     @Override
     protected FlowFile preprocessFlowFile(final ProcessContext context, final ProcessSession session, final FlowFile flowFile) {
-        FlowFile processed = flowFile;
-        // handle backward compatibility with old segment attributes
-        if (processed.getAttribute(FRAGMENT_COUNT_ATTRIBUTE) == null && processed.getAttribute(SEGMENT_COUNT_ATTRIBUTE) != null) {
-            processed = session.putAttribute(processed, FRAGMENT_COUNT_ATTRIBUTE, processed.getAttribute(SEGMENT_COUNT_ATTRIBUTE));
-        }
-        if (processed.getAttribute(FRAGMENT_INDEX_ATTRIBUTE) == null && processed.getAttribute(SEGMENT_INDEX_ATTRIBUTE) != null) {
-            processed = session.putAttribute(processed, FRAGMENT_INDEX_ATTRIBUTE, processed.getAttribute(SEGMENT_INDEX_ATTRIBUTE));
-        }
-        if (processed.getAttribute(FRAGMENT_ID_ATTRIBUTE) == null && processed.getAttribute(SEGMENT_ID_ATTRIBUTE) != null) {
-            processed = session.putAttribute(processed, FRAGMENT_ID_ATTRIBUTE, processed.getAttribute(SEGMENT_ID_ATTRIBUTE));
-        }
-
-        return processed;
+        return flowFile;
     }
 
     @Override
@@ -453,7 +433,7 @@ public class MergeContent extends BinFiles {
         String groupId = correlationAttributeName == null ? null : flowFile.getAttribute(correlationAttributeName);
 
         // when MERGE_STRATEGY is Defragment and correlationAttributeName is null then bin by fragment.identifier
-        if (groupId == null && MERGE_STRATEGY_DEFRAGMENT.equals(context.getProperty(MERGE_STRATEGY).getValue())) {
+        if (groupId == null && MERGE_STRATEGY_DEFRAGMENT.getValue().equals(context.getProperty(MERGE_STRATEGY).getValue())) {
             groupId = flowFile.getAttribute(FRAGMENT_ID_ATTRIBUTE);
         }
 
@@ -462,7 +442,7 @@ public class MergeContent extends BinFiles {
 
     @Override
     protected void setUpBinManager(final BinManager binManager, final ProcessContext context) {
-        if (MERGE_STRATEGY_DEFRAGMENT.equals(context.getProperty(MERGE_STRATEGY).getValue())) {
+        if (MERGE_STRATEGY_DEFRAGMENT.getValue().equals(context.getProperty(MERGE_STRATEGY).getValue())) {
             binManager.setFileCountAttribute(FRAGMENT_COUNT_ATTRIBUTE);
         } else {
             binManager.setFileCountAttribute(null);
@@ -505,7 +485,7 @@ public class MergeContent extends BinFiles {
         final List<FlowFile> contents = bin.getContents();
         final ProcessSession binSession = bin.getSession();
 
-        if (MERGE_STRATEGY_DEFRAGMENT.equals(context.getProperty(MERGE_STRATEGY).getValue())) {
+        if (MERGE_STRATEGY_DEFRAGMENT.getValue().equals(context.getProperty(MERGE_STRATEGY).getValue())) {
             final String error = getDefragmentValidationError(bin.getContents());
 
             // Fail the flow files and commit them
@@ -572,14 +552,21 @@ public class MergeContent extends BinFiles {
             fragmentIdentifier = flowFile.getAttribute(FRAGMENT_ID_ATTRIBUTE);
 
             final String fragmentCount = flowFile.getAttribute(FRAGMENT_COUNT_ATTRIBUTE);
-            if (!isNumber(fragmentCount)) {
-                return "Cannot Defragment " + flowFile + " because it does not have an integer value for the " + FRAGMENT_COUNT_ATTRIBUTE + " attribute";
-            } else if (decidedFragmentCount == null) {
-                decidedFragmentCount = fragmentCount;
-            } else if (!decidedFragmentCount.equals(fragmentCount)) {
-                return "Cannot Defragment " + flowFile + " because it is grouped with another FlowFile, and the two have differing values for the "
-                        + FRAGMENT_COUNT_ATTRIBUTE + " attribute: " + decidedFragmentCount + " and " + fragmentCount;
+            if (fragmentCount != null) {
+                if (!isNumber(fragmentCount)) {
+                    return "Cannot Defragment " + flowFile + " because it does not have an integer value for the " + FRAGMENT_COUNT_ATTRIBUTE + " attribute";
+                } else if (decidedFragmentCount == null) {
+                    decidedFragmentCount = fragmentCount;
+                } else if (!decidedFragmentCount.equals(fragmentCount)) {
+                    return "Cannot Defragment " + flowFile + " because it is grouped with another FlowFile, and the two have differing values for the "
+                            + FRAGMENT_COUNT_ATTRIBUTE + " attribute: " + decidedFragmentCount + " and " + fragmentCount;
+                }
             }
+        }
+
+        if (decidedFragmentCount == null) {
+            return "Cannot Defragment FlowFiles with Fragment Identifier " + fragmentIdentifier + " because no FlowFile arrived with the " + FRAGMENT_COUNT_ATTRIBUTE + " attribute "
+                + "and the expected number of fragments is unknown";
         }
 
         final int numericFragmentCount;
@@ -648,12 +635,7 @@ public class MergeContent extends BinFiles {
                         final Iterator<FlowFile> itr = contents.iterator();
                         while (itr.hasNext()) {
                             final FlowFile flowFile = itr.next();
-                            bin.getSession().read(flowFile, false, new InputStreamCallback() {
-                                @Override
-                                public void process(final InputStream in) throws IOException {
-                                    StreamUtils.copy(in, out);
-                                }
-                            });
+                            bin.getSession().read(flowFile, in -> StreamUtils.copy(in, out));
 
                             if (itr.hasNext()) {
                                 if (demarcator != null) {
@@ -694,7 +676,7 @@ public class MergeContent extends BinFiles {
 
         private byte[] getDelimiterContent(final ProcessContext context, final List<FlowFile> wrappers, final PropertyDescriptor descriptor) throws IOException {
             final String delimiterStrategyValue = context.getProperty(DELIMITER_STRATEGY).getValue();
-            if (DELIMITER_STRATEGY_FILENAME.equals(delimiterStrategyValue)) {
+            if (DELIMITER_STRATEGY_FILENAME.getValue().equals(delimiterStrategyValue)) {
                 return getDelimiterFileContent(context, wrappers, descriptor);
             } else {
                 return getDelimiterTextContent(context, wrappers, descriptor);
@@ -881,18 +863,11 @@ public class MergeContent extends BinFiles {
                             final OutputStream out = new NonCloseableOutputStream(bufferedOut);
 
                             for (final FlowFile flowFile : contents) {
-                                bin.getSession().read(flowFile, false, new InputStreamCallback() {
+                                bin.getSession().read(flowFile, new InputStreamCallback() {
                                     @Override
                                     public void process(final InputStream rawIn) throws IOException {
                                         try (final InputStream in = new BufferedInputStream(rawIn)) {
                                             final Map<String, String> attributes = new HashMap<>(flowFile.getAttributes());
-
-                                            // for backward compatibility purposes, we add the "legacy" NiFi attributes
-                                            attributes.put("nf.file.name", attributes.get(CoreAttributes.FILENAME.key()));
-                                            attributes.put("nf.file.path", attributes.get(CoreAttributes.PATH.key()));
-                                            if (attributes.containsKey(CoreAttributes.MIME_TYPE.key())) {
-                                                attributes.put("content-type", attributes.get(CoreAttributes.MIME_TYPE.key()));
-                                            }
                                             packager.packageFlowFile(in, out, attributes, flowFile.getSize());
                                         }
                                     }
@@ -926,7 +901,7 @@ public class MergeContent extends BinFiles {
 
         private final int compressionLevel;
 
-        private List<FlowFile> unmerged = new ArrayList<>();
+        private final List<FlowFile> unmerged = new ArrayList<>();
 
         public ZipMerge(final int compressionLevel) {
             this.compressionLevel = compressionLevel;
@@ -993,7 +968,7 @@ public class MergeContent extends BinFiles {
 
     private class AvroMerge implements MergeBin {
 
-        private List<FlowFile> unmerged = new ArrayList<>();
+        private final List<FlowFile> unmerged = new ArrayList<>();
 
         @Override
         public FlowFile merge(final Bin bin, final ProcessContext context) {
@@ -1014,7 +989,7 @@ public class MergeContent extends BinFiles {
                     public void process(final OutputStream rawOut) throws IOException {
                         try (final OutputStream out = new BufferedOutputStream(rawOut)) {
                             for (final FlowFile flowFile : contents) {
-                                bin.getSession().read(flowFile, false, new InputStreamCallback() {
+                                bin.getSession().read(flowFile, new InputStreamCallback() {
                                     @Override
                                     public void process(InputStream in) throws IOException {
                                         boolean canMerge = true;

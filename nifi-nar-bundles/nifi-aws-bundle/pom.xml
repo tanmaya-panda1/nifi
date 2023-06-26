@@ -27,7 +27,7 @@
 
     <properties>
         <!-- keep KCL 1.x until NIFI-8531 (blocked by NIFI-8287) -->
-        <aws-kinesis-client-library-version>1.14.9</aws-kinesis-client-library-version>
+        <aws-kinesis-client-library-version>1.14.10</aws-kinesis-client-library-version>
     </properties>
 
     <modules>
@@ -39,4 +39,15 @@
         <module>nifi-aws-parameter-value-providers</module>
         <module>nifi-aws-parameter-providers</module>
     </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Override Guava 31.0.1 from amazon-kinesis-client -->
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>32.0.1-jre</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 </project>

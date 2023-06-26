@@ -33,7 +33,6 @@ import org.apache.nifi.components.PropertyDescriptor.Builder;
 import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.dbcp.DBCPService;
-import org.apache.nifi.expression.AttributeExpression;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
@@ -418,19 +417,6 @@ public class PutDatabaseRecord extends AbstractProcessor {
         return propDescriptors;
     }
 
-    // TODO remove this at next major release as dynamic properties are not used by this processor
-    @Override
-    protected PropertyDescriptor getSupportedDynamicPropertyDescriptor(final String propertyDescriptorName) {
-        return new Builder()
-                .name(propertyDescriptorName)
-                .required(false)
-                .addValidator(StandardValidators.createAttributeExpressionLanguageValidator(AttributeExpression.ResultType.STRING, true))
-                .addValidator(StandardValidators.ATTRIBUTE_KEY_PROPERTY_NAME_VALIDATOR)
-                .expressionLanguageSupported(FLOWFILE_ATTRIBUTES)
-                .dynamic(true)
-                .build();
-    }
-
     @Override
     protected Collection<ValidationResult> customValidate(ValidationContext validationContext) {
         Collection<ValidationResult> validationResults = new ArrayList<>(super.customValidate(validationContext));
@@ -750,13 +736,13 @@ public class PutDatabaseRecord extends AbstractProcessor {
                                     targetDataType = DataTypeUtils.getDataTypeFromSQLTypeValue(fieldSqlType);
                                 }
                                 if (targetDataType != null) {
-                                    if (sqlType == Types.BLOB || sqlType == Types.BINARY) {
+                                    if (sqlType == Types.BLOB || sqlType == Types.BINARY || sqlType == Types.VARBINARY || sqlType == Types.LONGVARBINARY) {
                                         if (currentValue instanceof Object[]) {
                                             // Convert Object[Byte] arrays to byte[]
                                             Object[] src = (Object[]) currentValue;
                                             if (src.length > 0) {
                                                 if (!(src[0] instanceof Byte)) {
-                                                    throw new IllegalTypeConversionException("Cannot convert value " + currentValue + " to BLOB/BINARY");
+                                                    throw new IllegalTypeConversionException("Cannot convert value " + currentValue + " to BLOB/BINARY/VARBINARY/LONGVARBINARY");
                                                 }
                                             }
                                             byte[] dest = new byte[src.length];
@@ -767,7 +753,7 @@ public class PutDatabaseRecord extends AbstractProcessor {
                                         } else if (currentValue instanceof String) {
                                             currentValue = ((String) currentValue).getBytes(StandardCharsets.UTF_8);
                                         } else if (currentValue != null && !(currentValue instanceof byte[])) {
-                                            throw new IllegalTypeConversionException("Cannot convert value " + currentValue + " to BLOB/BINARY");
+                                            throw new IllegalTypeConversionException("Cannot convert value " + currentValue + " to BLOB/BINARY/VARBINARY/LONGVARBINARY");
                                         }
                                     } else {
                                         currentValue = DataTypeUtils.convertType(
@@ -866,6 +852,35 @@ public class PutDatabaseRecord extends AbstractProcessor {
                     ps.setClob(index, clob);
                 } catch (SQLException e) {
                     throw new IOException("Unable to parse data as CLOB/String " + value, e.getCause());
+                }
+            }
+        } else if (sqlType == Types.VARBINARY || sqlType == Types.LONGVARBINARY) {
+            if (fieldSqlType == Types.ARRAY || fieldSqlType == Types.VARCHAR) {
+                if (!(value instanceof byte[])) {
+                    if (value == null) {
+                        try {
+                            ps.setNull(index, Types.BLOB);
+                            return;
+                        } catch (SQLException e) {
+                            throw new IOException("Unable to setNull() on prepared statement" , e);
+                        }
+                    } else {
+                        throw new IOException("Expected VARBINARY/LONGVARBINARY to be of type byte[] but is instead " + value.getClass().getName());
+                    }
+                }
+                byte[] byteArray = (byte[]) value;
+                try {
+                    ps.setBytes(index, byteArray);
+                } catch (SQLException e) {
+                    throw new IOException("Unable to parse binary data with size" + byteArray.length, e.getCause());
+                }
+            } else {
+                byte[] byteArray = new byte[0];
+                try {
+                    byteArray = value.toString().getBytes(StandardCharsets.UTF_8);
+                    ps.setBytes(index, byteArray);
+                } catch (SQLException e) {
+                    throw new IOException("Unable to parse binary data with size" + byteArray.length, e.getCause());
                 }
             }
         } else {
@@ -1083,7 +1098,7 @@ public class PutDatabaseRecord extends AbstractProcessor {
         checkValuesForRequiredColumns(recordSchema, tableSchema, settings);
 
         Set<String> keyColumnNames = getUpdateKeyColumnNames(tableName, updateKeys, tableSchema);
-        Set<String> normalizedKeyColumnNames = normalizeKeyColumnNamesAndCheckForValues(recordSchema, updateKeys, settings, keyColumnNames, tableSchema.getQuotedIdentifierString());
+        normalizeKeyColumnNamesAndCheckForValues(recordSchema, updateKeys, settings, keyColumnNames);
 
         List<String> usedColumnNames = new ArrayList<>();
         List<Integer> usedColumnIndices = new ArrayList<>();
@@ -1117,7 +1132,15 @@ public class PutDatabaseRecord extends AbstractProcessor {
             }
         }
 
-        String sql = databaseAdapter.getUpsertStatement(tableName, usedColumnNames, normalizedKeyColumnNames);
+        final Set<String> literalKeyColumnNames = new HashSet<>(keyColumnNames.size());
+        for (String literalKeyColumnName : keyColumnNames) {
+            if (settings.escapeColumnNames) {
+                literalKeyColumnNames.add(tableSchema.getQuotedIdentifierString() + literalKeyColumnName + tableSchema.getQuotedIdentifierString());
+            } else {
+                literalKeyColumnNames.add(literalKeyColumnName);
+            }
+        }
+        String sql = databaseAdapter.getUpsertStatement(tableName, usedColumnNames, literalKeyColumnNames);
 
         return new SqlAndIncludedColumns(sql, usedColumnIndices);
     }
@@ -1129,7 +1152,7 @@ public class PutDatabaseRecord extends AbstractProcessor {
         checkValuesForRequiredColumns(recordSchema, tableSchema, settings);
 
         Set<String> keyColumnNames = getUpdateKeyColumnNames(tableName, updateKeys, tableSchema);
-        Set<String> normalizedKeyColumnNames = normalizeKeyColumnNamesAndCheckForValues(recordSchema, updateKeys, settings, keyColumnNames, tableSchema.getQuotedIdentifierString());
+        normalizeKeyColumnNamesAndCheckForValues(recordSchema, updateKeys, settings, keyColumnNames);
 
         List<String> usedColumnNames = new ArrayList<>();
         List<Integer> usedColumnIndices = new ArrayList<>();
@@ -1163,7 +1186,16 @@ public class PutDatabaseRecord extends AbstractProcessor {
             }
         }
 
-        String sql = databaseAdapter.getInsertIgnoreStatement(tableName, usedColumnNames, normalizedKeyColumnNames);
+        final Set<String> literalKeyColumnNames = new HashSet<>(keyColumnNames.size());
+        for (String literalKeyColumnName : keyColumnNames) {
+            if (settings.escapeColumnNames) {
+                literalKeyColumnNames.add(tableSchema.getQuotedIdentifierString() + literalKeyColumnName + tableSchema.getQuotedIdentifierString());
+            } else {
+                literalKeyColumnNames.add(literalKeyColumnName);
+            }
+        }
+
+        String sql = databaseAdapter.getInsertIgnoreStatement(tableName, usedColumnNames, literalKeyColumnNames);
 
         return new SqlAndIncludedColumns(sql, usedColumnIndices);
     }
@@ -1173,7 +1205,7 @@ public class PutDatabaseRecord extends AbstractProcessor {
             throws IllegalArgumentException, MalformedRecordException, SQLException {
 
         final Set<String> keyColumnNames = getUpdateKeyColumnNames(tableName, updateKeys, tableSchema);
-        final Set<String> normalizedKeyColumnNames = normalizeKeyColumnNamesAndCheckForValues(recordSchema, updateKeys, settings, keyColumnNames, tableSchema.getQuotedIdentifierString());
+        final Set<String> normalizedKeyColumnNames = normalizeKeyColumnNamesAndCheckForValues(recordSchema, updateKeys, settings, keyColumnNames);
 
         final StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("UPDATE ");
@@ -1382,7 +1414,7 @@ public class PutDatabaseRecord extends AbstractProcessor {
         return updateKeyColumnNames;
     }
 
-    private Set<String> normalizeKeyColumnNamesAndCheckForValues(RecordSchema recordSchema, String updateKeys, DMLSettings settings, Set<String> updateKeyColumnNames, final String quoteString)
+    private Set<String> normalizeKeyColumnNamesAndCheckForValues(RecordSchema recordSchema, String updateKeys, DMLSettings settings, Set<String> updateKeyColumnNames)
             throws MalformedRecordException {
         // Create a Set of all normalized Update Key names, and ensure that there is a field in the record
         // for each of the Update Key fields.

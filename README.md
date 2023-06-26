@@ -62,11 +62,11 @@ Apache NiFi was made for dataflow. It supports highly configurable directed grap
 
 ## Minimum Recommendations
 * JDK 17.0.6
-* Apache Maven 3.9.0
+* Apache Maven 3.9.2
 
 ## Minimum Requirements
-* JDK 11.0.16
-* Apache Maven 3.8.6
+* JDK 17.0.6
+* Apache Maven 3.9.2
 
 ## Getting Started
 
@@ -79,23 +79,15 @@ read through the [NiFi Developer's Guide](https://nifi.apache.org/developer-guid
 
 ### Building
 
-Run `mvn clean install` or for parallel build execute `mvn -T 2.0C clean install`.
+Run the following Maven command to build standard project modules using parallel execution:
 
-The parallel build should take around fifteen minutes on modern hardware.
+    ./mvnw clean install -T2C
 
-    laptop:nifi myuser$ mvn -T 2.0C clean install
-    [INFO] Scanning for projects...
-    [INFO] Inspecting build with total of 115 modules...
-        ...tens of thousands of lines elided...
-    [INFO] ------------------------------------------------------------------------
-    [INFO] BUILD SUCCESS
-    [INFO] ------------------------------------------------------------------------
-    [INFO] Total time: 09:24 min (Wall Clock)
-    [INFO] Finished at: 2015-04-30T00:30:36-05:00
-    [INFO] Final Memory: 173M/1359M
-    [INFO] ------------------------------------------------------------------------
+Run the following Maven command to build project modules with static analysis to confirm compliance with code and licensing requirements:
 
-Run `mvn clean install -DskipTests` to skip unit test execution.
+    ./mvnw clean install -T2C -P contrib-check
+
+Building on Microsoft Windows requires using `mvnw.cmd` instead of `mwnw` to run the Maven Wrapper.
 
 ### Deploying
 

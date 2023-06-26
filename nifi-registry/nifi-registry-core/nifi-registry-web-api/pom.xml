@@ -142,14 +142,14 @@
                 <dependency>
                     <groupId>com.github.jknack</groupId>
                     <artifactId>handlebars</artifactId>
-                    <version>4.3.0</version>
+                    <version>4.3.1</version>
                 </dependency>
             </dependencies>
             </plugin>
             <plugin>
                 <groupId>com.googlecode.maven-download-plugin</groupId>
                 <artifactId>download-maven-plugin</artifactId>
-                <version>1.2.1</version>
+                <version>1.6.8</version>
                 <executions>
                     <execution>
                         <id>download-swagger-ui</id>
@@ -358,7 +358,7 @@
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt</artifactId>
-            <version>0.7.0</version>
+            <version>0.9.1</version>
         </dependency>
         <!-- Test Dependencies -->
         <dependency>
@@ -392,7 +392,7 @@
         <dependency>
             <groupId>com.unboundid</groupId>
             <artifactId>unboundid-ldapsdk</artifactId>
-            <version>6.0.8</version>
+            <version>6.0.9</version>
             <scope>test</scope>
         </dependency>
         <dependency>

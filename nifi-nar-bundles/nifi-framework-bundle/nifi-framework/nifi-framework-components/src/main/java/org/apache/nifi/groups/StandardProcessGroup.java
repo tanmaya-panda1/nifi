@@ -87,6 +87,7 @@ import org.apache.nifi.registry.VariableDescriptor;
 import org.apache.nifi.registry.flow.FlowRegistryClientContextFactory;
 import org.apache.nifi.registry.flow.FlowRegistryClientNode;
 import org.apache.nifi.registry.flow.FlowRegistryException;
+import org.apache.nifi.registry.flow.FlowSnapshotContainer;
 import org.apache.nifi.registry.flow.RegisteredFlow;
 import org.apache.nifi.registry.flow.RegisteredFlowSnapshot;
 import org.apache.nifi.registry.flow.StandardVersionControlInformation;
@@ -213,6 +214,8 @@ public final class StandardProcessGroup implements ProcessGroup {
     private static final String DEFAULT_FLOWFILE_EXPIRATION = "0 sec";
     private static final long DEFAULT_BACKPRESSURE_OBJECT = 10_000L;
     private static final String DEFAULT_BACKPRESSURE_DATA_SIZE = "1 GB";
+    private static final Pattern INVALID_DIRECTORY_NAME_CHARACTERS = Pattern.compile("[\\s\\<\\>:\\'\\\"\\/\\\\\\|\\?\\*]");
+    private volatile String logFileSuffix;
 
 
     public StandardProcessGroup(final String id, final ControllerServiceProvider serviceProvider, final ProcessScheduler scheduler,
@@ -243,6 +246,7 @@ public final class StandardProcessGroup implements ProcessGroup {
         this.defaultFlowFileExpiration = new AtomicReference<>();
         this.defaultBackPressureObjectThreshold = new AtomicReference<>();
         this.defaultBackPressureDataSizeThreshold = new AtomicReference<>();
+        this.logFileSuffix = null;
 
         // save only the nifi properties needed, and account for the possibility those properties are missing
         if (nifiProperties == null) {
@@ -3864,8 +3868,9 @@ public final class StandardProcessGroup implements ProcessGroup {
                     throw new FlowRegistryException(flowRegistry + " cannot currently be used to synchronize with Flow Registry because it is currently validating");
                 }
 
-                final RegisteredFlowSnapshot registrySnapshot = flowRegistry.getFlowContents(
+                final FlowSnapshotContainer registrySnapshotContainer = flowRegistry.getFlowContents(
                         FlowRegistryClientContextFactory.getAnonymousContext(), vci.getBucketIdentifier(), vci.getFlowIdentifier(), vci.getVersion(), false);
+                final RegisteredFlowSnapshot registrySnapshot = registrySnapshotContainer.getFlowSnapshot();
                 final VersionedProcessGroup registryFlow = registrySnapshot.getFlowContents();
                 vci.setFlowSnapshot(registryFlow);
             } catch (final IOException | FlowRegistryException e) {
@@ -4418,6 +4423,20 @@ public final class StandardProcessGroup implements ProcessGroup {
             contentSize += queueSize.getByteCount();
         }
         return new QueueSize(count, contentSize);
+    }
+
+    @Override
+    public String getLogFileSuffix() {
+        return logFileSuffix;
+    }
+
+    @Override
+    public void setLogFileSuffix(final String logFileSuffix) {
+        if (logFileSuffix != null && INVALID_DIRECTORY_NAME_CHARACTERS.matcher(logFileSuffix).find()) {
+            throw new IllegalArgumentException("Log file suffix can not contain the following characters: space, <, >, :, \', \", /, \\, |, ?, *");
+        } else {
+            this.logFileSuffix = logFileSuffix;
+        }
     }
 
     @Override

@@ -16,6 +16,7 @@
  */
 package org.apache.nifi.processors.standard;
 
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.networknt.schema.JsonSchema;
@@ -24,6 +25,8 @@ import com.networknt.schema.SpecVersion.VersionFlag;
 import com.networknt.schema.ValidationMessage;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.InputRequirement.Requirement;
+import org.apache.nifi.annotation.behavior.Restricted;
+import org.apache.nifi.annotation.behavior.Restriction;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
 import org.apache.nifi.annotation.behavior.SystemResource;
@@ -35,6 +38,7 @@ import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.components.DescribedValue;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.RequiredPermission;
 import org.apache.nifi.components.resource.ResourceCardinality;
 import org.apache.nifi.components.resource.ResourceType;
 import org.apache.nifi.flowfile.FlowFile;
@@ -63,6 +67,14 @@ import java.util.Set;
 })
 @CapabilityDescription("Validates the contents of FlowFiles against a configurable JSON Schema. See json-schema.org for specification standards.")
 @SystemResourceConsideration(resource = SystemResource.MEMORY, description = "Validating JSON requires reading FlowFile content into memory")
+@Restricted(
+        restrictions = {
+                @Restriction(
+                        requiredPermission = RequiredPermission.REFERENCE_REMOTE_RESOURCES,
+                        explanation = "Schema configuration can reference resources over HTTP"
+                )
+        }
+)
 public class ValidateJson extends AbstractProcessor {
     public enum SchemaVersion implements DescribedValue {
         DRAFT_4("Draft Version 4", "Draft 4", VersionFlag.V4),
@@ -151,7 +163,11 @@ public class ValidateJson extends AbstractProcessor {
             ))
     );
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER;
+    static {
+        MAPPER = new ObjectMapper();
+        MAPPER.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
+    }
 
     private JsonSchema schema;
 
@@ -187,15 +203,18 @@ public class ValidateJson extends AbstractProcessor {
 
             if (errors.isEmpty()) {
                 getLogger().debug("JSON {} valid", flowFile);
+                session.getProvenanceReporter().route(flowFile, REL_VALID);
                 session.transfer(flowFile, REL_VALID);
             } else {
                 final String validationMessages = errors.toString();
                 flowFile = session.putAttribute(flowFile, ERROR_ATTRIBUTE_KEY, validationMessages);
                 getLogger().warn("JSON {} invalid: Validation Errors {}", flowFile, validationMessages);
+                session.getProvenanceReporter().route(flowFile, REL_INVALID);
                 session.transfer(flowFile, REL_INVALID);
             }
         } catch (final Exception e) {
             getLogger().error("JSON processing failed {}", flowFile, e);
+            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
     }

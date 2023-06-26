@@ -141,6 +141,10 @@ public class ListenHTTPServlet extends HttpServlet {
         this.writerFactory = processContext.getProperty(ListenHTTP.RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
     }
 
+    public void setPort(final int port) {
+        this.port = port;
+    }
+
     @Override
     protected void doHead(final HttpServletRequest request, final HttpServletResponse response) throws ServletException, IOException {
         if (request.getLocalPort() == port) {
@@ -344,17 +348,6 @@ public class ListenHTTPServlet extends HttpServlet {
                     }
                 } else {
                     attributes.putAll(unpackager.unpackageFlowFile(in, bos));
-
-                    if (destinationIsLegacyNiFi) {
-                        if (attributes.containsKey("nf.file.name")) {
-                            // for backward compatibility with old nifi...
-                            attributes.put(CoreAttributes.FILENAME.key(), attributes.remove("nf.file.name"));
-                        }
-
-                        if (attributes.containsKey("nf.file.path")) {
-                            attributes.put(CoreAttributes.PATH.key(), attributes.remove("nf.file.path"));
-                        }
-                    }
 
                     hasMoreData.set(unpackager.hasMoreData());
                 }

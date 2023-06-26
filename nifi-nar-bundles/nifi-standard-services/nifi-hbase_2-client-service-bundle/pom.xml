@@ -25,7 +25,7 @@
     <packaging>pom</packaging>
 
     <properties>
-        <hbase.version>2.5.3-hadoop3</hbase.version>
+        <hbase.version>2.5.5-hadoop3</hbase.version>
     </properties>
 
     <modules>
@@ -90,6 +90,12 @@
                 <groupId>com.fasterxml.woodstox</groupId>
                 <artifactId>woodstox-core</artifactId>
                 <version>5.4.0</version>
+            </dependency>
+            <!-- Override Guava 27 -->
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>32.0.1-jre</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

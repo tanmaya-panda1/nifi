@@ -18,6 +18,8 @@ name: ci-workflow
 on: [push, pull_request]
 
 env:
+  MAVEN_COMMAND: ./mvnw
+  MAVEN_COMMAND_WINDOWS: ./mvnw.cmd
   DEFAULT_MAVEN_OPTS: >-
     -Xmx3g
     -XX:ReservedCodeCacheSize=1g
@@ -36,7 +38,7 @@ env:
     -Dmaven.wagon.httpconnectionManager.maxPerRoute=5
     -Dmaven.wagon.httpconnectionManager.ttlSeconds=30
   MAVEN_COMPILE_COMMAND: >-
-    mvn test-compile
+    test-compile
     --show-version
     --no-snapshot-updates
     --no-transfer-progress
@@ -59,8 +61,9 @@ env:
     -pl -:nifi-stateless-system-test-suite
     -pl -:nifi-system-test-suite
     -pl -:nifi-nar-provider-assembly
+    -pl -:nifi-py4j-integration-tests
   MAVEN_VERIFY_COMMAND: >-
-    mvn verify
+    verify
     --show-version
     --no-snapshot-updates
     --no-transfer-progress
@@ -108,7 +111,8 @@ jobs:
           java-version: '17'
       - name: Maven Build
         run: >
-          mvn validate
+          ${{ env.MAVEN_COMMAND }}
+          validate
           --no-snapshot-updates
           --no-transfer-progress
           --fail-fast
@@ -146,6 +150,7 @@ jobs:
           MAVEN_OPTS: >-
             ${{ env.COMPILE_MAVEN_OPTS }}
         run: >
+          ${{ env.MAVEN_COMMAND }}
           ${{ env.MAVEN_COMPILE_COMMAND }}
       - name: Maven Verify
         env:
@@ -161,6 +166,7 @@ jobs:
             ${{ env.DEFAULT_MAVEN_OPTS }}
             -DargLine=${env.SUREFIRE_OPTS}
         run: >
+          ${{ env.MAVEN_COMMAND }}
           ${{ env.MAVEN_VERIFY_COMMAND }}
           ${{ env.MAVEN_BUILD_PROFILES }}
           ${{ env.MAVEN_PROJECTS }}
@@ -176,69 +182,8 @@ jobs:
       - name: Post Disk Usage
         run: df
 
-  ubuntu-build-hi:
-    timeout-minutes: 120
-    runs-on: ubuntu-latest
-    name: Ubuntu Zulu JDK 11 HI
-    steps:
-      - name: System Information
-        run: |
-          hostname
-          cat /proc/cpuinfo
-          cat /proc/meminfo
-          df
-      - name: Checkout Code
-        uses: actions/checkout@v3
-      - name: Cache Node Modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.npm
-            **/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-      - name: Set up Java 11
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '11'
-          cache: 'maven'
-      - name: Maven Compile
-        env:
-          MAVEN_OPTS: >-
-            ${{ env.COMPILE_MAVEN_OPTS }}
-        run: >
-          ${{ env.MAVEN_COMPILE_COMMAND }}
-      - name: Maven Verify
-        env:
-          NIFI_CI_LOCALE: >-
-            -Duser.language=hi
-            -Duser.country=IN
-          SUREFIRE_OPTS: >-
-            -Duser.language=hi
-            -Duser.country=IN
-            -Duser.region=IN
-            -Duser.timezone=Asia/Kolkata
-          MAVEN_OPTS: >-
-            ${{ env.DEFAULT_MAVEN_OPTS }}
-            -DargLine=${env.SUREFIRE_OPTS}
-        run: >
-          ${{ env.MAVEN_VERIFY_COMMAND }}
-          ${{ env.MAVEN_BUILD_PROFILES }}
-          ${{ env.MAVEN_PROJECTS }}
-      - name: Upload Test Reports
-        uses: actions/upload-artifact@v3
-        with:
-          name: surefire-reports-ubuntu-en
-          path: |
-            ./**/target/surefire-reports/*.txt
-            ./**/target/surefire-reports/*.xml
-          retention-days: 3
-        if: failure()
-      - name: Post Disk Usage
-        run: df
-
   macos-build-jp:
-    timeout-minutes: 120
+    timeout-minutes: 150
     runs-on: macos-latest
     name: MacOS Temurin JDK 17 JP
     steps:
@@ -268,6 +213,7 @@ jobs:
           MAVEN_OPTS: >-
             ${{ env.COMPILE_MAVEN_OPTS }}
         run: >
+          ${{ env.MAVEN_COMMAND }}
           ${{ env.MAVEN_COMPILE_COMMAND }}
       - name: Maven Verify
         env:
@@ -283,6 +229,7 @@ jobs:
             ${{ env.DEFAULT_MAVEN_OPTS }}
             -DargLine=${env.SUREFIRE_OPTS}
         run: >-
+          ${{ env.MAVEN_COMMAND }}
           ${{ env.MAVEN_VERIFY_COMMAND }}
           ${{ env.MAVEN_BUILD_PROFILES }}
           ${{ env.MAVEN_PROJECTS }}
@@ -299,9 +246,9 @@ jobs:
         run: df
 
   windows-build:
-    timeout-minutes: 120
+    timeout-minutes: 150
     runs-on: windows-latest
-    name: Windows Zulu JDK 11 FR
+    name: Windows Zulu JDK 17 FR
     steps:
       - name: System Information
         run: |
@@ -320,17 +267,18 @@ jobs:
             ~\AppData\npm-cache
             **\node_modules
           key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
-      - name: Set up Java 11
+      - name: Set up Java 17
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'
           cache: 'maven'
       - name: Maven Compile
         env:
           MAVEN_OPTS: >-
             ${{ env.COMPILE_MAVEN_OPTS }}
         run: >
+          ${{ env.MAVEN_COMMAND_WINDOWS }}
           ${{ env.MAVEN_COMPILE_COMMAND }}
       - name: Maven Verify
         env:
@@ -346,6 +294,7 @@ jobs:
             ${{ env.DEFAULT_MAVEN_OPTS }}
             -DargLine=${env.SUREFIRE_OPTS}
         run: >-
+          ${{ env.MAVEN_COMMAND_WINDOWS }}
           ${{ env.MAVEN_VERIFY_COMMAND }}
           ${{ env.MAVEN_BUILD_PROFILES }}
           ${{ env.MAVEN_PROJECTS }}

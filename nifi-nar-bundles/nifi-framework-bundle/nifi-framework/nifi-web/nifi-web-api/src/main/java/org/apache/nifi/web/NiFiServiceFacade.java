@@ -32,6 +32,7 @@ import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.flow.ExternalControllerServiceReference;
 import org.apache.nifi.flow.ParameterProviderReference;
 import org.apache.nifi.parameter.ParameterGroupConfiguration;
+import org.apache.nifi.registry.flow.FlowSnapshotContainer;
 import org.apache.nifi.registry.flow.RegisteredFlow;
 import org.apache.nifi.registry.flow.RegisteredFlowSnapshot;
 import org.apache.nifi.flow.VersionedParameterContext;
@@ -128,6 +129,7 @@ import org.apache.nifi.web.api.entity.SnippetEntity;
 import org.apache.nifi.web.api.entity.StartVersionControlRequestEntity;
 import org.apache.nifi.web.api.entity.StatusHistoryEntity;
 import org.apache.nifi.web.api.entity.TemplateEntity;
+import org.apache.nifi.web.api.entity.TenantsEntity;
 import org.apache.nifi.web.api.entity.UserEntity;
 import org.apache.nifi.web.api.entity.UserGroupEntity;
 import org.apache.nifi.web.api.entity.VariableRegistryEntity;
@@ -1635,7 +1637,7 @@ public interface NiFiServiceFacade {
      *
      * @throws ResourceNotFoundException if the Versioned Flow Snapshot could not be found
      */
-    RegisteredFlowSnapshot getVersionedFlowSnapshot(VersionControlInformationDTO versionControlInfo, boolean fetchRemoteFlows);
+    FlowSnapshotContainer getVersionedFlowSnapshot(VersionControlInformationDTO versionControlInfo, boolean fetchRemoteFlows);
 
     /**
      * Get the latest Versioned Flow Snapshot from the registry for the Process Group with the given ID
@@ -1645,7 +1647,7 @@ public interface NiFiServiceFacade {
      *
      * @throws ResourceNotFoundException if the Versioned Flow Snapshot could not be found
      */
-    RegisteredFlowSnapshot getVersionedFlowSnapshotByGroupId(String processGroupId);
+    FlowSnapshotContainer getVersionedFlowSnapshotByGroupId(String processGroupId);
 
     /**
      * Get the current state of the Process Group with the given ID, converted to a Versioned Flow Snapshot
@@ -1959,6 +1961,14 @@ public interface NiFiServiceFacade {
      * @return The user transfer objects
      */
     Set<UserEntity> getUsers();
+
+    /**
+     * Search for User and Group Tenants based on provided query string
+     *
+     * @param query Search query where null or empty returns unfiltered results
+     * @return Tenants Entity with zero or more matched Users and User Groups
+     */
+    TenantsEntity searchTenants(String query);
 
     /**
      * Updates the specified user.
@@ -2691,11 +2701,11 @@ public interface NiFiServiceFacade {
      * For any Controller Service that is found in the given Versioned Process Group, if that Controller Service is not itself included in the Versioned Process Groups,
      * attempts to find an existing Controller Service that matches the definition. If any is found, the component within the Versioned Process Group is updated to point
      * to the existing service.
-     *  @param versionedFlowSnapshot the flow snapshot
+     *  @param flowSnapshotContainer the flow snapshot container
      * @param parentGroupId the ID of the Process Group from which the Controller Services are inherited
      * @param user the NiFi user on whose behalf the request is happening; this user is used for validation so that only the Controller Services that the user has READ permissions to are included
      */
-    void resolveInheritedControllerServices(RegisteredFlowSnapshot versionedFlowSnapshot, String parentGroupId, NiFiUser user);
+    void resolveInheritedControllerServices(FlowSnapshotContainer flowSnapshotContainer, String parentGroupId, NiFiUser user);
 
     /**
      * For any Parameter Provider that is found in the given Versioned Process Group, attempts to find an existing Parameter Provider that matches the definition. If any is found,

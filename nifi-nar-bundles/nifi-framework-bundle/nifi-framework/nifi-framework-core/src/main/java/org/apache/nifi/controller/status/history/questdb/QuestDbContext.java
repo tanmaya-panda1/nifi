@@ -20,7 +20,6 @@ import io.questdb.cairo.CairoConfiguration;
 import io.questdb.cairo.CairoEngine;
 import io.questdb.griffin.SqlCompiler;
 import io.questdb.griffin.SqlExecutionContext;
-import io.questdb.griffin.SqlExecutionContextImpl;
 
 public class QuestDbContext {
     private final CairoEngine engine;
@@ -38,7 +37,7 @@ public class QuestDbContext {
     }
 
     public SqlExecutionContext getSqlExecutionContext() {
-        return new SqlExecutionContextImpl(engine, 1);
+        return SqlExecutionContextFactory.getInstance(engine);
     }
 
     public SqlCompiler getCompiler() {

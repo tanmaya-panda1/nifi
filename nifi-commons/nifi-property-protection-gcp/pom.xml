@@ -22,7 +22,8 @@
     </parent>
     <artifactId>nifi-property-protection-gcp</artifactId>
     <properties>
-        <gcp.sdk.version>26.12.0</gcp.sdk.version>
+        <gcp.sdk.version>26.15.0</gcp.sdk.version>
+        <guava.version>32.0.1-jre</guava.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -50,6 +51,12 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
         </dependency>
+        <!-- Override Guava 31.1 from google-cloud-kms -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>${guava.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.google.cloud</groupId>
             <artifactId>google-cloud-kms</artifactId>
@@ -58,23 +65,7 @@
                     <groupId>commons-logging</groupId>
                     <artifactId>commons-logging</artifactId>
                 </exclusion>
-                <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bcprov-jdk15on</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bcpkix-jdk15on</artifactId>
-                </exclusion>
             </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcprov-jdk18on</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk18on</artifactId>
         </dependency>
     </dependencies>
 </project>

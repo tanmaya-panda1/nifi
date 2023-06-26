@@ -35,6 +35,7 @@ import org.apache.nifi.groups.ProcessGroup;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.logging.LogLevel;
 import org.apache.nifi.logging.LogRepository;
+import org.apache.nifi.logging.StandardLoggingContext;
 import org.apache.nifi.logging.repository.NopLogRepository;
 import org.apache.nifi.nar.ExtensionManager;
 import org.apache.nifi.components.ConfigVerificationResult;
@@ -55,8 +56,6 @@ import org.apache.nifi.web.api.dto.ProcessorDTO;
 import org.apache.nifi.web.dao.ComponentStateDAO;
 import org.apache.nifi.web.dao.ProcessorDAO;
 import org.quartz.CronExpression;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.text.ParseException;
@@ -73,7 +72,6 @@ import java.util.stream.Collectors;
 
 public class StandardProcessorDAO extends ComponentDAO implements ProcessorDAO {
 
-    private static final Logger logger = LoggerFactory.getLogger(StandardProcessorDAO.class);
     private FlowController flowController;
     private ComponentStateDAO componentStateDAO;
 
@@ -485,7 +483,7 @@ public class StandardProcessorDAO extends ComponentDAO implements ProcessorDAO {
             new NopStateManager(), () -> false, flowController);
 
         final LogRepository logRepository = new NopLogRepository();
-        final ComponentLog configVerificationLog = new SimpleProcessLogger(processor, logRepository);
+        final ComponentLog configVerificationLog = new SimpleProcessLogger(processor, logRepository, new StandardLoggingContext(processor));
         final ExtensionManager extensionManager = flowController.getExtensionManager();
         final List<ConfigVerificationResult> verificationResults = processor.verifyConfiguration(processContext, configVerificationLog, attributes, extensionManager);
 
