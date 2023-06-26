@@ -16,23 +16,25 @@
  */
 package org.apache.nifi.adx.model;
 
-import com.microsoft.azure.kusto.data.Client;
-import com.microsoft.azure.kusto.ingest.IngestClient;
+public enum KustoIngestionResult {
+    SUCCEEDED("Succeeded"),PARTIALLY_SUCCEEDED("PartiallySucceeded"),FAILED("Failed"),DEFAULT("Default");
+    private String status;
 
-public class KustoIngestClient {
-    private IngestClient kustoIngestClient;
-    private Client executionClient;
-
-    public KustoIngestClient(IngestClient kustoIngestClient, Client executionClient) {
-        this.kustoIngestClient = kustoIngestClient;
-        this.executionClient = executionClient;
+    KustoIngestionResult(String status) {
+        this.status = status;
     }
 
-    public IngestClient getKustoIngestClient() {
-        return kustoIngestClient;
+    public static KustoIngestionResult fromString(String status) {
+        for (KustoIngestionResult result : KustoIngestionResult.values()) {
+            if (result.status.equalsIgnoreCase(status)) {
+                return result;
+            }
+        }
+        return DEFAULT;
     }
 
-    public Client getExecutionClient() {
-        return executionClient;
+    public String getStatus() {
+        return status;
     }
+
 }

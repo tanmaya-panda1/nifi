@@ -37,7 +37,6 @@ import java.util.HashMap;
  * -DclusterUrl=(clusterUrl)
  * -DdatabaseName=(databaseName)
  * -DadxQuery=(query-to-be-executed-in-source-ADX)
- * -DadxQueryWhichExceedsLimit=(query-whose-execution-will-exceed-the-kusto-query-limits)
  **/
 
 @EnabledIfSystemProperty(named = "executeE2ETests", matches = "true")

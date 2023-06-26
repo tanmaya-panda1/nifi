@@ -14,26 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.adx.enums;
+package org.apache.nifi.processors.adx.mock;
 
-public enum RelationshipStatus {
-    RL_SUCCEEDED("RL_SUCCEEDED","Relationship for success"),
-    RL_FAILED("RL_FAILED","Relationship for failure");
+import org.apache.nifi.adx.model.KustoQueryResponse;
+import org.apache.nifi.adx.service.StandardKustoQueryService;
+import org.mockito.Mockito;
 
-    private String displayName;
-    private String description;
+import java.io.InputStream;
 
-
-    RelationshipStatus(String displayName, String description) {
-        this.displayName = displayName;
-        this.description = description;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public String getDescription() {
-        return description;
+public class MockStandardKustoQueryService extends StandardKustoQueryService {
+    @Override
+    public KustoQueryResponse executeQuery(String databaseName, String query)  {
+        InputStream inputStream = Mockito.mock(InputStream.class);
+        return new KustoQueryResponse(inputStream);
     }
 }

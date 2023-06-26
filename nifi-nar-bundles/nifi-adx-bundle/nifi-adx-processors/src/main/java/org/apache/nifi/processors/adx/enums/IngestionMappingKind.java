@@ -16,7 +16,7 @@
  */
 package org.apache.nifi.processors.adx.enums;
 
-public enum IngestionMappingKindEnum {
+public enum IngestionMappingKind {
     IM_KIND_APACHEAVRO("IngestionsMappingKind:Avro","Ingestion Mapping Kind (Type) is Avro."),
     IM_KIND_AVRO("IngestionsMappingKind:Avro","Ingestion Mapping Kind (Type) is Avro."),
     IM_KIND_CSV("IngestionsMappingKind:Csv","Ingestion Mapping Kind (Type) is Csv."),
@@ -28,7 +28,7 @@ public enum IngestionMappingKindEnum {
     private String description;
 
 
-    IngestionMappingKindEnum(String mappingKind, String description) {
+    IngestionMappingKind(String mappingKind, String description) {
         this.mappingKind = mappingKind;
         this.description = description;
     }

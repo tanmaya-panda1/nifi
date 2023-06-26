@@ -17,6 +17,10 @@
 package org.apache.nifi.adx;
 
 import com.microsoft.azure.kusto.data.StreamingClient;
+import com.microsoft.azure.kusto.data.exceptions.DataClientException;
+import com.microsoft.azure.kusto.data.exceptions.DataServiceException;
+import org.apache.nifi.adx.mock.MockStandardKustoQueryService;
+import org.apache.nifi.adx.model.KustoQueryResponse;
 import org.apache.nifi.adx.service.StandardKustoQueryService;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.reporting.InitializationException;
@@ -30,6 +34,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.List;
 import java.util.Map;
@@ -37,7 +42,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestAzureAdxSourceConnectionService {
+class StandardKustoQueryServiceTest {
 
     private TestRunner runner;
 
@@ -54,7 +59,7 @@ class TestAzureAdxSourceConnectionService {
     @BeforeEach
     public void setup() throws InitializationException {
         runner = TestRunners.newTestRunner(NoOpProcessor.class);
-        service = new StandardKustoQueryService();
+        service = new MockStandardKustoQueryService();
         runner.addControllerService("test-good", service);
     }
 
@@ -121,6 +126,23 @@ class TestAzureAdxSourceConnectionService {
         String clusterURL = controllerServiceConfiguration.getProperty(StandardKustoQueryService.CLUSTER_URL);
         Assertions.assertNull(clusterURL);
         assertThrows(IllegalStateException.class, () -> runner.enableControllerService(service));
+    }
+
+    @Test
+    void testExecuteQuery() throws DataServiceException, DataClientException {
+        configureAppId();
+        configureAppKey();
+        configureAppTenant();
+        configureClusterURL();
+        runner.assertValid(service);
+        runner.setValidateExpressionUsage(false);
+        runner.enableControllerService(service);
+
+        StreamingClient executionClient = service.getKustoQueryClient();
+        Mockito.when(executionClient.executeStreamingQuery(Mockito.anyString(), Mockito.anyString())).thenReturn(null);
+        KustoQueryResponse kustoQueryResponse = service.executeQuery("test", "test");
+        Assertions.assertNotNull(kustoQueryResponse);
+        Assertions.assertFalse(kustoQueryResponse.isError());
     }
 
     private void configureAppId() {

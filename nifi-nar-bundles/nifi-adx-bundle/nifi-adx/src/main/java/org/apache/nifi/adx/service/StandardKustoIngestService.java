@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.adx;
+package org.apache.nifi.adx.service;
 
 import com.microsoft.azure.kusto.data.Client;
 import com.microsoft.azure.kusto.data.ClientFactory;
@@ -24,7 +24,6 @@ import com.microsoft.azure.kusto.data.exceptions.DataClientException;
 import com.microsoft.azure.kusto.data.exceptions.DataServiceException;
 import com.microsoft.azure.kusto.ingest.IngestClient;
 import com.microsoft.azure.kusto.ingest.IngestClientFactory;
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.azure.kusto.ingest.exceptions.IngestionClientException;
 import com.microsoft.azure.kusto.ingest.exceptions.IngestionServiceException;
 import com.microsoft.azure.kusto.ingest.result.IngestionResult;
@@ -33,7 +32,11 @@ import com.microsoft.azure.kusto.ingest.result.OperationStatus;
 import com.microsoft.azure.kusto.ingest.source.StreamSourceInfo;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.nifi.adx.AzureDataExplorerParameter;
+import org.apache.nifi.adx.KustoIngestService;
+import org.apache.nifi.adx.NiFiVersion;
 import org.apache.nifi.adx.model.AzureDataExplorerConnectionParameters;
+import org.apache.nifi.adx.model.KustoIngestionRequest;
 import org.apache.nifi.adx.model.KustoIngestionResult;
 import org.apache.nifi.adx.model.KustoQueryResponse;
 import org.apache.nifi.annotation.behavior.ReadsAttribute;
@@ -50,9 +53,6 @@ import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.reporting.InitializationException;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -71,7 +71,7 @@ import java.util.concurrent.TimeoutException;
         @ReadsAttribute(attribute = "APP_TENANT", description = "Azure application tenant for accessing the ADX-Cluster."),
         @ReadsAttribute(attribute = "CLUSTER_URL", description = "Endpoint of ADX cluster. This is required only when streaming data to ADX cluster is enabled."),
 })
-public class StandardKustoQueryService extends AbstractControllerService implements KustoIngestService {
+public class StandardKustoIngestService extends AbstractControllerService implements KustoIngestService {
 
     public static final PropertyDescriptor INGEST_URL = new PropertyDescriptor
             .Builder().name(AzureDataExplorerParameter.INGEST_URL.name())
@@ -119,20 +119,11 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
             .Builder().name(AzureDataExplorerParameter.CLUSTER_URL.name())
             .displayName(AzureDataExplorerParameter.CLUSTER_URL.getDisplayName())
             .description(AzureDataExplorerParameter.CLUSTER_URL.getDescription())
-            .required(false)
+            .required(true)
             .addValidator(StandardValidators.URL_VALIDATOR)
             .build();
 
-    private static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS = Collections.unmodifiableList(
-            Arrays.asList(
-                    KUSTO_AUTH_STRATEGY,
-                    INGEST_URL,
-                    APP_ID,
-                    APP_KEY,
-                    APP_TENANT,
-                    CLUSTER_URL
-            )
-    );
+    private static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS = List.of(KUSTO_AUTH_STRATEGY, INGEST_URL, APP_ID, APP_KEY, APP_TENANT, CLUSTER_URL);
 
     private IngestClient ingestClient;
 
@@ -141,7 +132,7 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
     private AzureDataExplorerConnectionParameters connectionParameters;
 
     @Override
-    protected List<PropertyDescriptor> getSupportedPropertyDescriptors() {
+    public List<PropertyDescriptor> getSupportedPropertyDescriptors() {
         return PROPERTY_DESCRIPTORS;
     }
 
@@ -156,18 +147,20 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
 
         getLogger().info("Starting Azure ADX Connection Service...");
         connectionParameters = new AzureDataExplorerConnectionParameters(context.getProperty(KUSTO_AUTH_STRATEGY).evaluateAttributeExpressions().getValue(),
-                context.getProperty(INGEST_URL).evaluateAttributeExpressions().getValue(),
                 context.getProperty(APP_ID).evaluateAttributeExpressions().getValue(),
                 context.getProperty(APP_KEY).evaluateAttributeExpressions().getValue(),
                 context.getProperty(APP_TENANT).evaluateAttributeExpressions().getValue(),
-                context.getProperty(CLUSTER_URL).evaluateAttributeExpressions().getValue());
+                context.getProperty(CLUSTER_URL).evaluateAttributeExpressions().getValue(),
+                context.getProperty(INGEST_URL).evaluateAttributeExpressions().getValue()
+        );
 
-        if (this.ingestClient != null) {
-            onStopped();
+        if (this.ingestClient == null) {
+            this.ingestClient = createKustoIngestClient(this.connectionParameters.getKustoIngestionURL(), this.connectionParameters.getAppId(), this.connectionParameters.getAppKey(), this.connectionParameters.getAppTenant(), false, this.connectionParameters.getKustoEngineURL(), this.connectionParameters.getKustoAuthStrategy());
         }
 
-        this.ingestClient = createKustoIngestClient(this.connectionParameters.getKustoIngestionURL(), this.connectionParameters.getAppId(), this.connectionParameters.getAppKey(), this.connectionParameters.getAppTenant(), false, this.connectionParameters.getKustoEngineURL(), this.connectionParameters.getKustoAuthStrategy());
-        this.executionClient = createKustoExecutionClient(this.connectionParameters.getKustoEngineURL(), this.connectionParameters.getAppId(), this.connectionParameters.getAppKey(), this.connectionParameters.getAppTenant(), this.connectionParameters.getKustoAuthStrategy());
+        if(this.executionClient == null) {
+            this.executionClient = createKustoExecutionClient(this.connectionParameters.getKustoEngineURL(), this.connectionParameters.getAppId(), this.connectionParameters.getAppKey(), this.connectionParameters.getAppTenant(), this.connectionParameters.getKustoAuthStrategy());
+        }
 
     }
 
@@ -186,7 +179,7 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
     }
 
 
-    public IngestClient createKustoIngestClient(final String ingestUrl,
+    protected IngestClient createKustoIngestClient(final String ingestUrl,
                                                 final String appId,
                                                 final String appKey,
                                                 final String appTenant,
@@ -209,9 +202,9 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
         return kustoIngestClient;
     }
 
-    public KustoIngestionResult ingestData(boolean isStreamingEnabled, InputStream inputStream, IngestionProperties ingestionProperties) {
-        StreamSourceInfo info = new StreamSourceInfo(inputStream);
-        if (isStreamingEnabled) {
+    public KustoIngestionResult ingestData(KustoIngestionRequest kustoIngestionRequest) {
+        StreamSourceInfo info = new StreamSourceInfo(kustoIngestionRequest.getInputStream());
+        if (kustoIngestionRequest.isStreamingEnabled()) {
             this.ingestClient = createKustoIngestClient(this.connectionParameters.getKustoIngestionURL(),
                     this.connectionParameters.getAppId(),
                     this.connectionParameters.getAppKey(),
@@ -225,7 +218,7 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
         IngestionResult ingestionResult = null;
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
         try {
-            ingestionResult = ingestClient.ingestFromStream(info, ingestionProperties);
+            ingestionResult = ingestClient.ingestFromStream(info, kustoIngestionRequest.getIngestionProperties());
             List<IngestionStatus> statuses;
             CompletableFuture<List<IngestionStatus>> future = new CompletableFuture<>();
             IngestionResult finalIngestionResult = ingestionResult;
@@ -270,18 +263,18 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
         }
     }
 
-    public ConnectionStringBuilder createKustoEngineConnectionString(final String clusterUrl, final String appId, final String appKey, final String appTenant, final String kustoAuthStrategy) {
+    private ConnectionStringBuilder createKustoEngineConnectionString(final String clusterUrl, final String appId, final String appKey, final String appTenant, final String kustoAuthStrategy) {
         final ConnectionStringBuilder kcsb;
         switch (kustoAuthStrategy) {
             case "application":
-                if (StringUtils.isNotEmpty(appId) && StringUtils.isNotEmpty(appKey)) {
+                if (StringUtils.isNotEmpty(appId) && StringUtils.isNotEmpty(appKey) && StringUtils.isNotEmpty(appTenant)) {
                     kcsb = ConnectionStringBuilder.createWithAadApplicationCredentials(
                             clusterUrl,
                             appId,
                             appKey,
                             appTenant);
                 } else {
-                    throw new ProcessException("Kusto authentication missing App Key.");
+                    throw new ProcessException("Kusto authentication missing App Credentials.");
                 }
                 break;
 
@@ -301,7 +294,8 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
         return kcsb;
     }
 
-    public Client createKustoExecutionClient(final String clusterUrl, final String appId, final String appKey, final String appTenant, final String kustoAuthStrategy) {
+    protected Client createKustoExecutionClient(final String clusterUrl, final String appId, final String appKey, final String appTenant, final String kustoAuthStrategy) {
+        getLogger().info("Creating KustoExecutionClient for clusterUrl: " + clusterUrl + " appId: " + appId + " appTenant: " + appTenant + " kustoAuthStrategy: " + kustoAuthStrategy);
         try {
             return ClientFactory.createClient(createKustoEngineConnectionString(clusterUrl, appId, appKey, appTenant, kustoAuthStrategy));
         } catch (Exception e) {
@@ -320,5 +314,13 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
             kustoQueryResponse = new KustoQueryResponse(true,e.getMessage());
         }
         return kustoQueryResponse;
+    }
+
+    public IngestClient getIngestClient() {
+        return ingestClient;
+    }
+
+    public Client getExecutionClient() {
+        return executionClient;
     }
 }

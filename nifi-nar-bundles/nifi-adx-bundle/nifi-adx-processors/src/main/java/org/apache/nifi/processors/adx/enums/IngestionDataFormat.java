@@ -16,7 +16,7 @@
  */
 package org.apache.nifi.processors.adx.enums;
 
-public enum DataFormatEnum {
+public enum IngestionDataFormat {
     AVRO(".avro", "An Avro format with support for logical types and for the snappy compression codec."),
     APACHEAVRO(".apacheavro", "An Avro format with support for logical types and for the snappy compression codec."),
     CSV(".csv", "A text file with comma-separated values (,). For more information, see RFC 4180: Common Format " +
@@ -37,7 +37,7 @@ public enum DataFormatEnum {
     TSVE(".tsv", "A text file with tab-delimited values (\\t). A backslash (\\) is used as escape character."),
     TXT(".txt", "A text file with lines separated by \\n. Empty lines are skipped.");
 
-    DataFormatEnum(String extension, String description) {
+    IngestionDataFormat(String extension, String description) {
         this.extension = extension;
         this.description = description;
     }

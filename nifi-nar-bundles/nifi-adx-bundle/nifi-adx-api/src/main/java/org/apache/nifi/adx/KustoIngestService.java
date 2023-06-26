@@ -16,17 +16,13 @@
  */
 package org.apache.nifi.adx;
 
-import com.microsoft.azure.kusto.ingest.IngestClient;
+import org.apache.nifi.adx.model.KustoIngestionRequest;
+import org.apache.nifi.adx.model.KustoIngestionResult;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
-import org.apache.nifi.controller.ControllerService;
-import org.apache.nifi.processor.exception.ProcessException;
 
-@Tags({"azure", "adx"})
-@CapabilityDescription("Connection-Service to Azure ADX (Kusto) ingestion cluster.")
-public interface AdxConnectionService extends ControllerService {
-
-    void execute()  throws ProcessException;
-    IngestClient getAdxClient();
-
+@Tags({"azure", "adx", "explorer", "kusto", "ingest"})
+@CapabilityDescription("Connection-Service for Azure ADX (Kusto) ingestion cluster to ingest data.")
+public interface KustoIngestService extends KustoQueryService {
+    KustoIngestionResult ingestData(KustoIngestionRequest kustoIngestionRequest);
 }

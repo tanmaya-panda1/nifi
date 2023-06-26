@@ -16,11 +16,10 @@
  */
 package org.apache.nifi.processors.adx;
 
-
 import org.apache.nifi.adx.service.StandardKustoQueryService;
 import org.apache.nifi.processor.ProcessorInitializationContext;
-import org.apache.nifi.processors.adx.mock.MockAzureAdxSourceConnectionService;
 import org.apache.nifi.processors.adx.mock.MockQueryAzureDataExplorer;
+import org.apache.nifi.processors.adx.mock.MockStandardKustoQueryService;
 import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.util.MockComponentLog;
 import org.apache.nifi.util.TestRunner;
@@ -58,10 +57,9 @@ class QueryAzureDataExplorerTest {
         testRunner = TestRunners.newTestRunner(queryAzureDataExplorer);
         testRunner.setValidateExpressionUsage(false);
 
-        azureAdxSourceConnectionService = new MockAzureAdxSourceConnectionService();
+        azureAdxSourceConnectionService = new MockStandardKustoQueryService();
 
         testRunner.addControllerService("adx-source-connection-service", azureAdxSourceConnectionService, new HashMap<>());
-
         testRunner.setProperty(azureAdxSourceConnectionService, StandardKustoQueryService.APP_ID,"sample");
         testRunner.setProperty(azureAdxSourceConnectionService, StandardKustoQueryService.APP_KEY,"sample");
         testRunner.setProperty(azureAdxSourceConnectionService, StandardKustoQueryService.APP_TENANT,"sample");

@@ -18,49 +18,52 @@ package org.apache.nifi.adx.model;
 
 public class AzureDataExplorerConnectionParameters {
 
-    private String kustoAuthStrategy;
-    private String appId;
-    private String appKey;
-    private String appTenant;
-    private String kustoEngineURL;
+    private final String kustoAuthStrategy;
+    private final String appId;
+    private final String appKey;
+    private final String appTenant;
+    private final String kustoEngineURL;
+    private final String kustoIngestionURL;
+
+    public AzureDataExplorerConnectionParameters(String kustoAuthStrategy, String appId, String appKey, String appTenant, String kustoEngineURL, String kustoIngestionURL) {
+        this.kustoAuthStrategy = kustoAuthStrategy;
+        this.appId = appId;
+        this.appKey = appKey;
+        this.appTenant = appTenant;
+        this.kustoEngineURL = kustoEngineURL;
+        this.kustoIngestionURL = kustoIngestionURL;
+    }
+
+    public AzureDataExplorerConnectionParameters(String kustoAuthStrategy, String appId, String appKey, String appTenant, String kustoEngineURL) {
+        this.kustoAuthStrategy = kustoAuthStrategy;
+        this.appId = appId;
+        this.appKey = appKey;
+        this.appTenant = appTenant;
+        this.kustoEngineURL = kustoEngineURL;
+        this.kustoIngestionURL = null;
+    }
 
     public String getKustoAuthStrategy() {
         return kustoAuthStrategy;
-    }
-
-    public void setKustoAuthStrategy(String kustoAuthStrategy) {
-        this.kustoAuthStrategy = kustoAuthStrategy;
     }
 
     public String getAppId() {
         return appId;
     }
 
-    public void setAppId(String appId) {
-        this.appId = appId;
-    }
-
     public String getAppKey() {
         return appKey;
-    }
-
-    public void setAppKey(String appKey) {
-        this.appKey = appKey;
     }
 
     public String getAppTenant() {
         return appTenant;
     }
 
-    public void setAppTenant(String appTenant) {
-        this.appTenant = appTenant;
-    }
-
     public String getKustoEngineURL() {
         return kustoEngineURL;
     }
 
-    public void setKustoEngineURL(String kustoEngineURL) {
-        this.kustoEngineURL = kustoEngineURL;
+    public String getKustoIngestionURL() {
+        return kustoIngestionURL;
     }
 }

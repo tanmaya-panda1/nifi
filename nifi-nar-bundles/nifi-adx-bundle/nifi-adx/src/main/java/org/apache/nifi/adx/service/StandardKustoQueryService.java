@@ -118,12 +118,7 @@ public class StandardKustoQueryService extends AbstractControllerService impleme
      */
     @OnEnabled
     public void onEnabled(final ConfigurationContext context) throws ProcessException {
-        adxConnectionParams = new AzureDataExplorerConnectionParameters();
-        adxConnectionParams.setKustoAuthStrategy(context.getProperty(KUSTO_AUTH_STRATEGY).getValue());
-        adxConnectionParams.setAppId(context.getProperty(APP_ID).getValue());
-        adxConnectionParams.setAppKey(context.getProperty(APP_KEY).getValue());
-        adxConnectionParams.setAppTenant(context.getProperty(APP_TENANT).getValue());
-        adxConnectionParams.setKustoEngineURL(context.getProperty(CLUSTER_URL).getValue());
+        adxConnectionParams = new AzureDataExplorerConnectionParameters(context.getProperty(KUSTO_AUTH_STRATEGY).getValue(), context.getProperty(APP_ID).getValue(), context.getProperty(APP_KEY).getValue(), context.getProperty(APP_TENANT).getValue(), context.getProperty(CLUSTER_URL).getValue());
         if (this.kustoClient == null) {
             this.kustoClient = getKustoQueryClient();
         }

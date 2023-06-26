@@ -22,7 +22,9 @@ public enum AzureDataExplorerParameter {
     APP_ID("Application ID", "Azure application ID for accessing the ADX-Cluster"),
     APP_KEY("Application KEY", "Azure application Key for accessing the ADX-Cluster"),
     APP_TENANT("Application Tenant", "Azure application tenant for accessing the ADX-Cluster"),
-    CLUSTER_URL("Cluster URL", "Endpoint of ADX cluster. This is required only when streaming data to ADX cluster is enabled.");
+    CLUSTER_URL("Cluster URL", "Endpoint of ADX cluster. This is required only when streaming data to ADX cluster is enabled."),
+    IS_STREAMING_ENABLED("Is Streaming enabled","This property determines whether it is required to stream data to ADX."),
+    INGEST_URL("Ingest URL","URL of the ingestion endpoint of the Azure Data Explorer cluster.");
 
     private final String paramDisplayName;
     private final String description;

@@ -14,26 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.adx;
+package org.apache.nifi.adx.model;
 
-import org.apache.nifi.util.TestRunner;
-import org.apache.nifi.util.TestRunners;
-import org.junit.Before;
-import org.junit.Test;
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
 
+import java.io.InputStream;
 
-public class AzureAdxIngestProcessorTest {
+public class KustoIngestionRequest {
 
-    private TestRunner testRunner;
+    private boolean isStreamingEnabled;
+    private InputStream inputStream;
+    private IngestionProperties ingestionProperties;
 
-    @Before
-    public void init() {
-        testRunner = TestRunners.newTestRunner(AzureAdxIngestProcessor.class);
+    public KustoIngestionRequest(boolean isStreamingEnabled, InputStream inputStream, IngestionProperties ingestionProperties) {
+        this.isStreamingEnabled = isStreamingEnabled;
+        this.inputStream = inputStream;
+        this.ingestionProperties = ingestionProperties;
     }
 
-    @Test
-    public void testProcessor() {
-
+    public boolean isStreamingEnabled() {
+        return isStreamingEnabled;
     }
 
+    public InputStream getInputStream() {
+        return inputStream;
+    }
+
+    public IngestionProperties getIngestionProperties() {
+        return ingestionProperties;
+    }
 }
